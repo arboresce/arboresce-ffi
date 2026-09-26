@@ -395,6 +395,10 @@ def test_typescript_consumer(browser=False, sdk=SDK, artifacts=None):
         shutil.copytree(sdk / "tests/consumers/typescript", consumer)
         shutil.copytree(sdk / "bindings/typescript/test", consumer / "test")
         run(
+            ["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"],
+            cwd=consumer,
+        )
+        run(
             [
                 "npm",
                 "install",

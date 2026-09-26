@@ -61,10 +61,16 @@ jobs:
         with:
           go-version: '1.27.1'
           cache: false
-      - uses: swift-actions/setup-swift@7591e4f04c00624cb043783da51a7fd6ee0a6bf6
+      - name: Select Xcode and verify Swift 6.3
         if: matrix.language == 'swift'
-        with:
-          swift-version: '6.3'
+        env:
+          DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+        run: |
+          test -d "$DEVELOPER_DIR"
+          echo "DEVELOPER_DIR=$DEVELOPER_DIR" >> "$GITHUB_ENV"
+          xcodebuild -version
+          swift --version
+          make doctor-swift
       - name: Setup
         run: make setup-checks setup-${{ matrix.language }}
       - name: Native regression tests
@@ -72,7 +78,12 @@ jobs:
         run: make test-${{ matrix.language }}
       - name: Node and WASM regression tests
         if: matrix.language == 'typescript'
-        run: make test-node test-wasm setup-browser test-browser test-typescript-consumer test-browser-consumer setup-go setup-c check-generated
+        run: make test-node test-wasm setup-browser test-browser setup-go setup-c check-generated
+      - name: Installed TypeScript and browser consumers with a fresh npm cache
+        if: matrix.language == 'typescript'
+        env:
+          npm_config_cache: ${{ runner.temp }}/arboresce-consumer-npm-cache
+        run: make test-typescript-consumer test-browser-consumer
       - name: Package and platform helper regressions
         if: matrix.language == 'typescript'
         run: make test-tooling

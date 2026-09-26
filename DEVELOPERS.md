@@ -399,6 +399,10 @@ Registry publication and signing remain external.
 `test-typescript-consumer`, `test-browser-consumer`, `test-kotlin-consumer`,
 `test-go-consumer` and `test-swift-consumer` use isolated installed packages.
 Python wheel and C/C++ installed-prefix checks are part of their normal tests.
+TypeScript consumers first install their locked test tools with `npm ci`, which
+requires registry access on a fresh cache. They then install the local SDK
+tarballs offline; an unpublished SDK version can be tested without registry
+access for any SDK package. Hosted CI exercises this with a separate fresh cache.
 Go packages contain every declared static archive and validate receipts for the
 core revision, generator revision/binary, compiler and source inputs before ZIP
 creation. Consumers resolve the prepared module using a local file-backed proxy.
