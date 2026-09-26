@@ -1,0 +1,6 @@
+{
+  "repository": "https://github.com/NordSecurity/uniffi-bindgen-go",
+  "version": "0.7.1+v0.31.0",
+  "revision": "0b7fb4ceef12021bd7f790cc516fa9133e001813",
+  "uniffi": "0.31.0"
+}

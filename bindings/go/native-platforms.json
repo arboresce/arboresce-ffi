@@ -1,0 +1,43 @@
+{
+  "schema": 1,
+  "platforms": {
+    "darwin_arm64": "aarch64-apple-darwin",
+    "darwin_amd64": "x86_64-apple-darwin",
+    "linux_arm64": "aarch64-unknown-linux-gnu",
+    "linux_amd64": "x86_64-unknown-linux-gnu"
+  },
+  "source_files": [
+    "scripts/make.sh",
+    "Cargo.toml",
+    "Cargo.lock",
+    "rust-toolchain.toml",
+    "crates/ffi/Cargo.toml",
+    "crates/ffi/src/lib.rs",
+    "crates/ffi/uniffi.toml",
+    "crates/ffi/go-bindgen.json",
+    "bindings/go/native-platforms.json",
+    "bindings/go/go.mod",
+    "bindings/go/arboresce.go",
+    "bindings/go/internal/native/link.go",
+    "bindings/go/internal/native/arboresce_ffi.go",
+    "bindings/go/internal/native/native.h",
+    "scripts/checks.sh",
+    "scripts/native.sh",
+    "scripts/packages.sh",
+    "scripts/swift.sh",
+    "scripts/support.sh",
+    "tests/platforms/targets.json",
+    "tests/consumers/package_tools.py"
+  ],
+  "package_files": [
+    "go.mod",
+    "arboresce.go",
+    "README.md",
+    "LICENSE-MIT",
+    "LICENSE-APACHE",
+    "native-platforms.json",
+    "internal/native/link.go",
+    "internal/native/arboresce_ffi.go",
+    "internal/native/native.h"
+  ]
+}

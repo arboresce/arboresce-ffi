@@ -1,0 +1,16 @@
+if(NOT TARGET Arboresce::c_shared)
+    add_library(Arboresce::c_shared SHARED IMPORTED)
+    set_target_properties(Arboresce::c_shared PROPERTIES
+        IMPORTED_LOCATION "${ARBORESCE_LIBRARY_DIR}/@ARBORESCE_SHARED_FILE@"
+        INTERFACE_INCLUDE_DIRECTORIES "${ARBORESCE_INCLUDE_DIR}"
+        INTERFACE_COMPILE_FEATURES c_std_11)
+    add_library(Arboresce::c_static STATIC IMPORTED)
+    set_target_properties(Arboresce::c_static PROPERTIES
+        IMPORTED_LOCATION "${ARBORESCE_LIBRARY_DIR}/libarboresce_c.a"
+        INTERFACE_INCLUDE_DIRECTORIES "${ARBORESCE_INCLUDE_DIR}"
+        INTERFACE_COMPILE_FEATURES c_std_11
+        INTERFACE_COMPILE_DEFINITIONS ARBORESCE_STATIC
+        INTERFACE_LINK_LIBRARIES "@ARBORESCE_NATIVE_LINK_LIBRARIES@")
+    add_library(Arboresce::c INTERFACE IMPORTED)
+    set_target_properties(Arboresce::c PROPERTIES INTERFACE_LINK_LIBRARIES Arboresce::c_shared)
+endif()

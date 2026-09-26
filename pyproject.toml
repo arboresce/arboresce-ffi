@@ -1,0 +1,46 @@
+[build-system]
+requires = ["maturin==1.15.0"]
+build-backend = "maturin"
+
+[project]
+name = "arboresce"
+version = "0.0.0"
+description = "Python SDK for Arboresce."
+readme = "bindings/python/README.md"
+requires-python = ">=3.14"
+license = "MIT OR Apache-2.0"
+authors = [{ name = "Tyson Lupul", email = "tyson@arboresce.ai" }]
+keywords = ["arboresce"]
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://arboresce.ai"
+Repository = "https://github.com/arboresce/arboresce-ffi"
+Issues = "https://github.com/arboresce/arboresce-ffi/issues"
+
+[tool.maturin]
+bindings = "uniffi"
+manifest-path = "crates/ffi/Cargo.toml"
+python-source = "bindings/python/src"
+module-name = "arboresce.arboresce_ffi"
+
+[dependency-groups]
+checks = ["ruff==0.16.9", "mypy==2.3.1", "clang-format==21.1.0"]
+build = ["maturin==1.15.0", "cargo-zigbuild==0.23.4", "ziglang==0.16.0"]
+
+[tool.ruff]
+target-version = "py314"
+extend-exclude = ["bindings/python/src/arboresce/arboresce_ffi.py"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.mypy]
+strict = true
+show_error_codes = true

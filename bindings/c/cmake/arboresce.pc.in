@@ -1,0 +1,11 @@
+prefix=${pcfiledir}/../..
+exec_prefix=${prefix}
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: Arboresce
+Description: Arboresce C ABI
+Version: @ARBORESCE_VERSION@
+Libs: -L${libdir} -larboresce_c
+Libs.private: @ARBORESCE_NATIVE_LIBS@
+Cflags: -I${includedir}

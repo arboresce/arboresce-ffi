@@ -1,0 +1,8 @@
+{
+  "abi_version": 65536,
+  "symbols": ["arboresce_v1_abi_version", "arboresce_v1_name", "arboresce_v1_print_name"],
+  "layouts": {
+    "32": {"pointer_bits": 32, "size": 8, "alignment": 4, "data_offset": 0, "len_offset": 4},
+    "64": {"pointer_bits": 64, "size": 16, "alignment": 8, "data_offset": 0, "len_offset": 8}
+  }
+}

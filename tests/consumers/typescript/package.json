@@ -1,0 +1,14 @@
+{
+  "name": "arboresce-consumer-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test build/test/*.test.js"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "@types/node": "22.19.15",
+    "playwright": "1.63.0"
+  }
+}

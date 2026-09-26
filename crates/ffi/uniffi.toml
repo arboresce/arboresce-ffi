@@ -1,0 +1,15 @@
+[bindings.python]
+cdylib_name = "arboresce_ffi"
+
+[bindings.kotlin]
+package_name = "ai.arboresce.internal"
+cdylib_name = "arboresce_ffi"
+
+[bindings.swift]
+module_name = "ArboresceBindings"
+ffi_module_name = "ArboresceNative"
+generate_module_map = true
+
+[bindings.go]
+package_name = "native"
+go_mod = "arboresce.ai/internal/native"

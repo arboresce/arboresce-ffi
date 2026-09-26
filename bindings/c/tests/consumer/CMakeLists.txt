@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.24)
+project(ArboresceCConsumer LANGUAGES C)
+find_package(Arboresce CONFIG REQUIRED)
+set(ARBORESCE_LINKAGE shared CACHE STRING "C linkage")
+add_executable(consumer main.c)
+target_link_libraries(consumer PRIVATE Arboresce::c_${ARBORESCE_LINKAGE})
+target_compile_options(consumer PRIVATE -Wall -Wextra -Werror)

@@ -1,0 +1,70 @@
+cmake_minimum_required(VERSION 3.24)
+project(Arboresce VERSION 0.0.0 LANGUAGES C)
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+include(CTest)
+if(NOT IS_DIRECTORY "${ARBORESCE_NATIVE_DIR}")
+    message(FATAL_ERROR "ARBORESCE_NATIVE_DIR must contain the built C libraries")
+endif()
+if(APPLE)
+    set(ARBORESCE_SHARED_FILE libarboresce_c.1.dylib)
+elseif(UNIX)
+    set(ARBORESCE_SHARED_FILE libarboresce_c.so.1)
+else()
+    message(FATAL_ERROR "This native package target is not qualified")
+endif()
+file(READ "${ARBORESCE_NATIVE_DIR}/native-static-libs.txt" ARBORESCE_NATIVE_LIBS)
+string(STRIP "${ARBORESCE_NATIVE_LIBS}" ARBORESCE_NATIVE_LIBS)
+separate_arguments(ARBORESCE_NATIVE_LINK_LIBRARIES UNIX_COMMAND "${ARBORESCE_NATIVE_LIBS}")
+set(ARBORESCE_VERSION "${PROJECT_VERSION}" CACHE STRING "SDK version")
+configure_package_config_file(cmake/ArboresceConfig.cmake.in
+    "${CMAKE_CURRENT_BINARY_DIR}/ArboresceConfig.cmake"
+    INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/Arboresce"
+    PATH_VARS CMAKE_INSTALL_LIBDIR CMAKE_INSTALL_INCLUDEDIR)
+configure_file(cmake/ArboresceTargets.cmake.in
+    "${CMAKE_CURRENT_BINARY_DIR}/ArboresceTargets.cmake" @ONLY)
+write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/ArboresceConfigVersion.cmake"
+    VERSION "${ARBORESCE_VERSION}" COMPATIBILITY SameMajorVersion)
+configure_file(cmake/arboresce.pc.in "${CMAKE_CURRENT_BINARY_DIR}/arboresce.pc" @ONLY)
+install(DIRECTORY include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+install(FILES "${ARBORESCE_NATIVE_DIR}/libarboresce_c.a"
+    "${ARBORESCE_NATIVE_DIR}/${ARBORESCE_SHARED_FILE}"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+if(APPLE)
+    install(FILES "${ARBORESCE_NATIVE_DIR}/libarboresce_c.dylib" DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+else()
+    install(FILES "${ARBORESCE_NATIVE_DIR}/libarboresce_c.so" DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+endif()
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/ArboresceConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/ArboresceTargets.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/ArboresceConfigVersion.cmake"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/Arboresce")
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/arboresce.pc" DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig")
+install(FILES LICENSE-MIT LICENSE-APACHE DESTINATION "${CMAKE_INSTALL_DATADIR}/arboresce-c")
+file(READ README.md ARBORESCE_README)
+string(REPLACE "../../DEVELOPERS.md" "DEVELOPERS.md" ARBORESCE_README "${ARBORESCE_README}")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/README.md" "${ARBORESCE_README}")
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/README.md" ../../DEVELOPERS.md
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/arboresce-c")
+if(BUILD_TESTING)
+    find_package(Threads REQUIRED)
+    foreach(linkage IN ITEMS shared static)
+        string(TOUPPER "${linkage}" linkage_type)
+        add_library(native_${linkage} ${linkage_type} IMPORTED)
+        if(linkage STREQUAL "shared")
+            set_target_properties(native_${linkage} PROPERTIES IMPORTED_LOCATION "${ARBORESCE_NATIVE_DIR}/${ARBORESCE_SHARED_FILE}")
+        else()
+            set_target_properties(native_${linkage} PROPERTIES IMPORTED_LOCATION "${ARBORESCE_NATIVE_DIR}/libarboresce_c.a"
+                INTERFACE_COMPILE_DEFINITIONS ARBORESCE_STATIC
+                INTERFACE_LINK_LIBRARIES "${ARBORESCE_NATIVE_LINK_LIBRARIES}")
+        endif()
+        foreach(fixture IN ITEMS api layout print_name)
+            add_executable(c_${fixture}_${linkage} "tests/${fixture}.c")
+            target_compile_features(c_${fixture}_${linkage} PRIVATE c_std_11)
+            target_compile_options(c_${fixture}_${linkage} PRIVATE -Wall -Wextra -Werror -UNDEBUG)
+            target_include_directories(c_${fixture}_${linkage} PRIVATE include)
+            target_link_libraries(c_${fixture}_${linkage} PRIVATE native_${linkage} Threads::Threads)
+            add_test(NAME c_${fixture}_${linkage} COMMAND c_${fixture}_${linkage})
+        endforeach()
+    endforeach()
+endif()

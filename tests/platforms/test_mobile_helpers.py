@@ -1,0 +1,359 @@
+import io
+import json
+import os
+import shutil
+import socket
+import struct
+import subprocess
+import tempfile
+import unittest
+import warnings
+import zipfile
+from pathlib import Path
+from unittest.mock import Mock, patch
+
+import android_elf
+import runtime_evidence
+import swift_package
+import test_android
+import test_ios
+
+
+class RuntimeEvidence(unittest.TestCase):
+    def test_collection_is_optional_and_preserves_actual_runtime(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            destination = Path(temporary) / "runtime.jsonl"
+            with patch.dict(os.environ, {}, clear=True):
+                entry = runtime_evidence.record(
+                    "swift",
+                    "ios-sim-arm64",
+                    "simulator",
+                    {"runtime": "iOS-26-0"},
+                    cpu="arm64",
+                )
+            self.assertFalse(destination.exists())
+            self.assertFalse(entry["minimum_runtime"])
+            with patch.dict(
+                os.environ,
+                {
+                    "ARBORESCE_TEST_EVIDENCE": str(destination),
+                    "ARBORESCE_TEST_SUITE": "mobile",
+                },
+            ):
+                runtime_evidence.record(
+                    "android",
+                    "android-arm64",
+                    "emulator",
+                    {"api": 36, "page_size": 16384},
+                    cpu="arm64",
+                )
+            saved = json.loads(destination.read_text())
+            self.assertEqual(saved["runtime"], {"api": 36, "page_size": 16384})
+            self.assertEqual(saved["suite"], "mobile")
+            self.assertEqual(saved["execution"], "emulator")
+
+    def test_container_mode_uses_docker_engine_architecture(self):
+        with (
+            patch(
+                "runtime_evidence.subprocess.check_output",
+                side_effect=[
+                    "aarch64\n",
+                    "owned-container\n",
+                    "sha256:actual-image\n",
+                    "x86_64\nLinux\nglibc 2.36\n",
+                ],
+            ) as commands,
+            patch("runtime_evidence.subprocess.run") as cleanup,
+        ):
+            mode, runtime = runtime_evidence.container_runtime("image:pinned", "amd64")
+        self.assertEqual(mode, "container-emulated")
+        self.assertEqual(runtime["image_id"], "sha256:actual-image")
+        self.assertEqual(
+            commands.call_args_list[2].args[0],
+            ["docker", "inspect", "--format", "{{.Image}}", "owned-container"],
+        )
+        cleanup.assert_called_once_with(
+            ["docker", "rm", "--force", "owned-container"],
+            check=True,
+            capture_output=True,
+        )
+
+
+class AndroidSelection(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix="arb-mobile-helpers-")
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+
+    def image(self, api, tag, abi):
+        path = (
+            self.root
+            / "system-images"
+            / f"android-{api}"
+            / tag
+            / abi
+            / "source.properties"
+        )
+        path.parent.mkdir(parents=True)
+        path.write_text(
+            f"AndroidVersion.ApiLevel={api}\nSystemImage.Abi={abi}\nSystemImage.TagId={tag}\n"
+        )
+
+    def test_selects_installed_16k_image_for_host(self):
+        self.image(36, "google_apis", "arm64-v8a")
+        self.image(35, "google_apis_ps16k", "arm64-v8a")
+        self.image(36, "google_apis_ps16k", "x86_64")
+        self.assertEqual(
+            test_android.select_android_image(self.root, "arm64"),
+            "system-images;android-35;google_apis_ps16k;arm64-v8a",
+        )
+        self.assertEqual(
+            test_android.select_android_image(self.root, "x86_64"),
+            "system-images;android-36;google_apis_ps16k;x86_64",
+        )
+
+    def test_ordinary_or_wrong_architecture_image_is_not_qualification(self):
+        self.image(36, "google_apis", "arm64-v8a")
+        self.image(36, "google_apis_ps16k", "x86_64")
+        with self.assertRaisesRegex(ValueError, "Install.*16 KB"):
+            test_android.select_android_image(self.root, "arm64")
+
+    def test_accepts_sdk_metadata_with_separate_page_size_tag(self):
+        self.image(36, "google_apis_ps16k", "arm64-v8a")
+        properties = (
+            self.root
+            / "system-images/android-36/google_apis_ps16k/arm64-v8a/source.properties"
+        )
+        properties.write_text(
+            "AndroidVersion.ApiLevel=36\nSystemImage.Abi=arm64-v8a\n"
+            "SystemImage.TagId=google_apis,page_size_16kb\n"
+            "SystemImage.TagDisplay=Google APIs,16 KB Page Size\n"
+        )
+        self.assertEqual(
+            test_android.select_android_image(self.root, "arm64"),
+            "system-images;android-36;google_apis_ps16k;arm64-v8a",
+        )
+
+    def test_requires_observed_16k_page_size(self):
+        self.assertEqual(test_android.require_page_size("16384\n"), 16384)
+        for value in ("4096", "", "not found"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                test_android.require_page_size(value)
+
+    def test_port_ownership_survives_socket_handoff(self):
+        with test_android.reserve_emulator_port(self.root) as (first, release):
+            release()
+            with self.assertRaisesRegex(ValueError, "No free"):
+                with test_android.reserve_emulator_port(self.root, (first,)):
+                    self.fail("Port ownership lock was ignored")
+            with test_android.reserve_emulator_port(self.root) as (second, _):
+                self.assertNotEqual(first, second)
+        with test_android.reserve_emulator_port(self.root, (first,)) as (again, _):
+            self.assertEqual(first, again)
+
+    def test_port_selection_preserves_other_listener(self):
+        with socket.socket() as listener:
+            listener.bind(("127.0.0.1", 0))
+            port = listener.getsockname()[1]
+            with self.assertRaisesRegex(ValueError, "No free"):
+                with test_android.reserve_emulator_port(self.root, (port,)):
+                    self.fail("Port already held by another process was selected")
+            self.assertEqual(listener.getsockname()[1], port)
+
+
+class AndroidLibraries(unittest.TestCase):
+    def elf(self, alignment=16384, address=0):
+        data = bytearray(120)
+        data[:6] = b"\x7fELF\x02\x01"
+        struct.pack_into("<H", data, 18, 183)
+        struct.pack_into("<Q", data, 32, 64)
+        struct.pack_into("<HH", data, 54, 56, 1)
+        struct.pack_into("<I", data, 64, 1)
+        struct.pack_into("<Q", data, 80, address)
+        struct.pack_into("<Q", data, 112, alignment)
+        return bytes(data)
+
+    def archive(self, entries):
+        storage = io.BytesIO()
+        with warnings.catch_warnings(), zipfile.ZipFile(storage, "w") as archive:
+            warnings.simplefilter("ignore", UserWarning)
+            for name, data in entries:
+                archive.writestr(name, data)
+        return zipfile.ZipFile(storage)
+
+    def test_checks_jna_as_well_as_rust(self):
+        names = ("lib/arm64-v8a/libarboresce_ffi.so", "lib/arm64-v8a/libjnidispatch.so")
+        with self.archive([(name, self.elf()) for name in names]) as archive:
+            self.assertEqual(
+                android_elf.check_apk_native(archive, ("arm64-v8a",)),
+                {"arm64-v8a": ["libarboresce_ffi.so", "libjnidispatch.so"]},
+            )
+        with self.archive(
+            [(names[0], self.elf()), (names[1], self.elf(4096))]
+        ) as archive:
+            with self.assertRaisesRegex(ValueError, "Insufficient ELF"):
+                android_elf.check_apk_native(archive, ("arm64-v8a",))
+
+    def test_rejects_duplicates_missing_jna_and_unexpected_inventory(self):
+        name = "lib/arm64-v8a/libarboresce_ffi.so"
+        for entries, expected in (
+            ([(name, self.elf())] * 2, "Duplicate"),
+            ([(name, self.elf())], "missing"),
+            ([], "inventory"),
+        ):
+            with self.subTest(expected=expected), self.archive(entries) as archive:
+                with self.assertRaisesRegex(ValueError, expected):
+                    android_elf.check_apk_native(archive, ("arm64-v8a",))
+
+    def test_rejects_truncated_and_incongruent_elf(self):
+        for data in (b"", b"\x7fELF", self.elf()[:80], self.elf(address=4096)):
+            with self.subTest(size=len(data)), self.assertRaises(ValueError):
+                android_elf.check_elf(data, "arm64-v8a", 16384)
+
+
+class IOSSelection(unittest.TestCase):
+    def runtime(self, version, architecture="arm64", available=True):
+        return {
+            "identifier": "com.apple.CoreSimulator.SimRuntime.iOS-"
+            + version.replace(".", "-"),
+            "version": version,
+            "isAvailable": available,
+            "supportedArchitectures": [architecture],
+            "supportedDeviceTypes": [{"identifier": "compatible"}],
+        }
+
+    def device(self, identifier="compatible", minimum="17.0"):
+        return {
+            "identifier": identifier,
+            "productFamily": "iPhone",
+            "minRuntimeVersionString": minimum,
+            "maxRuntimeVersionString": "65535.255.255",
+        }
+
+    def test_selects_compatible_runtime_device_and_architecture(self):
+        runtimes = [
+            self.runtime("26.5"),
+            self.runtime("27.0", available=False),
+            self.runtime("28.0", "x86_64"),
+        ]
+        runtime, device, architecture = test_ios.select_ios_destination(
+            runtimes, [self.device(), self.device("newest-only", "30.0")], "arm64"
+        )
+        self.assertEqual(
+            (runtime, device, architecture),
+            ("com.apple.CoreSimulator.SimRuntime.iOS-26-5", "compatible", "arm64"),
+        )
+
+    def test_rejects_missing_or_incompatible_runtime(self):
+        for runtimes, devices in (
+            ([], [self.device()]),
+            ([self.runtime("26.5", "x86_64")], [self.device()]),
+            ([self.runtime("26.5")], [self.device(minimum="27.0")]),
+        ):
+            with (
+                self.subTest(runtimes=runtimes),
+                self.assertRaisesRegex(ValueError, "Install an available iOS"),
+            ):
+                test_ios.select_ios_destination(runtimes, devices, "arm64")
+
+    def test_owned_device_cleanup_runs_after_failure(self):
+        checked = Mock(side_effect=["owned-uuid", ""])
+        with patch.object(test_ios.subprocess, "run") as run:
+            with self.assertRaisesRegex(RuntimeError, "failed"):
+                with test_ios.owned_ios_simulator(
+                    checked, "runtime", "device"
+                ) as device:
+                    self.assertEqual(device, "owned-uuid")
+                    raise RuntimeError("failed")
+            run.assert_called_once_with(
+                ["xcrun", "simctl", "shutdown", "owned-uuid"],
+                capture_output=True,
+                timeout=60,
+            )
+        self.assertEqual(
+            checked.call_args_list[-1].args[0],
+            ["xcrun", "simctl", "delete", "owned-uuid"],
+        )
+
+
+class SwiftPackageLayout(unittest.TestCase):
+    def test_accepts_source_and_staged_packages_without_external_paths(self):
+        for sources, framework in (
+            ("Sources", "Arboresce.xcframework"),
+            ("bindings/swift/Sources", "build/swift/Arboresce.xcframework"),
+        ):
+            with (
+                self.subTest(sources=sources),
+                tempfile.TemporaryDirectory(prefix="arb-swift-layout-") as temporary,
+            ):
+                root = Path(temporary)
+                (root / sources).mkdir(parents=True)
+                (root / framework).mkdir(parents=True)
+                (root / framework / "Info.plist").write_text("fixture")
+                self.assertEqual(
+                    swift_package.swift_package_paths(root),
+                    (root / sources, root / framework),
+                )
+                (root / framework / "Info.plist").unlink()
+                with self.assertRaisesRegex(ValueError, "Missing Swift"):
+                    swift_package.swift_package_paths(root)
+
+
+class SwiftStaging(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory(prefix="arb-swift-stage-")
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        sdk = Path(__file__).resolve().parents[2]
+        for path in ("bindings/swift", "scripts"):
+            (self.root / path).mkdir(parents=True)
+        for directory in ("Sources", "Tests", "dev"):
+            shutil.copytree(
+                sdk / "bindings/swift" / directory,
+                self.root / "bindings/swift" / directory,
+            )
+        for name in ("LICENSE-MIT", "LICENSE-APACHE"):
+            shutil.copyfile(sdk / name, self.root / name)
+        shutil.copyfile(
+            sdk / "bindings/swift/README.md", self.root / "bindings/swift/README.md"
+        )
+        shutil.copyfile(sdk / "scripts/swift.sh", self.root / "scripts/swift.sh")
+        framework = self.root / "build/swift/Arboresce.xcframework"
+        framework.mkdir(parents=True)
+        (framework / "Info.plist").write_text("native artifact fixture")
+
+    def stage(self, accepted=True):
+        command = 'set -euo pipefail; check_swift_local() { return "$CHECK_RESULT"; }; die() { exit 1; }; source "$ROOT/scripts/swift.sh"; stage_swift_dev'
+        return subprocess.run(
+            ["bash", "-c", command],
+            env=dict(
+                os.environ, ROOT=str(self.root), CHECK_RESULT="0" if accepted else "1"
+            ),
+            capture_output=True,
+            text=True,
+        )
+
+    def test_copies_canonical_inputs_and_replaces_stale_sources(self):
+        destination = self.root / "build/swift-dev"
+        self.assertEqual(self.stage().returncode, 0)
+        source = Path("Sources/Arboresce/Arboresce.swift")
+        self.assertEqual(
+            (destination / source).read_bytes(),
+            (self.root / "bindings/swift" / source).read_bytes(),
+        )
+        self.assertEqual(
+            (destination / "Package.swift").read_bytes(),
+            (self.root / "bindings/swift/dev/Package.swift").read_bytes(),
+        )
+        (destination / "Sources/obsolete.swift").write_text("stale")
+        (destination / ".build").mkdir()
+        (destination / ".build/cache").write_text("cache")
+        self.assertEqual(self.stage().returncode, 0)
+        self.assertFalse((destination / "Sources/obsolete.swift").exists())
+        self.assertEqual((destination / ".build/cache").read_text(), "cache")
+        self.assertTrue((destination / "Arboresce.xcframework/Info.plist").is_file())
+        self.assertFalse(any(path.is_symlink() for path in destination.rglob("*")))
+
+    def test_failed_receipt_does_not_stage_any_package(self):
+        self.assertNotEqual(self.stage(False).returncode, 0)
+        self.assertFalse((self.root / "build/swift-dev").exists())

@@ -1,0 +1,5 @@
+@PACKAGE_INIT@
+set_and_check(ARBORESCE_LIBRARY_DIR "@PACKAGE_CMAKE_INSTALL_LIBDIR@")
+set_and_check(ARBORESCE_INCLUDE_DIR "@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@")
+include("${CMAKE_CURRENT_LIST_DIR}/ArboresceTargets.cmake")
+check_required_components(Arboresce)

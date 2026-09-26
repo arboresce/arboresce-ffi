@@ -1,0 +1,28 @@
+[workspace]
+members = ["crates/c", "crates/ffi", "crates/node", "crates/wasm"]
+resolver = "3"
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.98.0"
+authors = ["Tyson Lupul <tyson@arboresce.ai>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/arboresce/arboresce-ffi"
+publish = false
+
+[workspace.dependencies]
+arboresce = { git = "https://github.com/arboresce/arboresce", rev = "f0ffbfa8be935bd49c084c2b83a86975967709a4" }
+uniffi = "=0.31.0"
+napi = { version = "=3.13.0", default-features = false, features = ["napi8"] }
+napi-derive = "=3.6.9"
+napi-build = "=2.5.0"
+wasm-bindgen = "=0.2.127"
+
+[profile.release]
+lto = "thin"
+strip = "debuginfo"
+
+[profile.c-release]
+inherits = "release"
+panic = "unwind"
