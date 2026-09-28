@@ -5,6 +5,10 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT"
 export PATH="$ROOT/build/tools/bin:$PATH"
 
+# shellcheck source=scripts/rust.sh
+source "$ROOT/scripts/rust.sh"
+prepare_rust_flags
+
 die() { printf '%s\n' "$*" >&2; exit 1; }
 require() { command -v "$1" >/dev/null || die "Required tool is missing: $1"; }
 target_dir() { cargo metadata --locked --no-deps --format-version 1 | jq -r .target_directory; }
@@ -153,6 +157,7 @@ stage_go_native() {
     archive="bindings/go/internal/native/lib/$platform/libarboresce_ffi.a"
     mkdir -p "$(dirname "$archive")"
     cp "$(target_dir)/$target/release/libarboresce_ffi.a" "$archive"
+    case "$target" in *-apple-*) xcrun strip -S "$archive" ;; esac
     {
         while IFS= read -r file; do
             digest=$(shasum -a 256 "$file" | cut -d ' ' -f 1)
@@ -239,7 +244,7 @@ build_swift() {
     swift build --package-path build/swift-dev
 }
 swift_inventory() {
-    shasum -a 256 Cargo.toml Cargo.lock rust-toolchain.toml crates/ffi/Cargo.toml crates/ffi/uniffi.toml scripts/make.sh scripts/swift.sh bindings/swift/dev/Package.swift
+    shasum -a 256 Cargo.toml Cargo.lock rust-toolchain.toml crates/ffi/Cargo.toml crates/ffi/build.rs crates/ffi/uniffi.toml scripts/make.sh scripts/rust.sh scripts/swift.sh bindings/swift/dev/Package.swift
     sed '/^let releaseChecksum = /d' Package.swift | shasum -a 256
     find crates/ffi/src bindings/swift/Sources build/swift/Arboresce.xcframework -type f -print | LC_ALL=C sort | while IFS= read -r file; do shasum -a 256 "$file"; done
     rustc --version
@@ -262,16 +267,18 @@ build_swift_apple() (
         cargo build --locked --release -p arboresce-ffi --target "$target"
     done
     rm -rf build/swift
-    mkdir -p build/swift/include build/swift/macos build/swift/simulator
+    mkdir -p build/swift/include build/swift/macos build/swift/simulator build/swift/ios
     cp bindings/swift/Sources/ArboresceBindings/ArboresceNative.h build/swift/include/
     cp bindings/swift/Sources/ArboresceBindings/ArboresceNative.modulemap build/swift/include/module.modulemap
     lipo -create "$(target_dir)/aarch64-apple-darwin/release/libarboresce_ffi.a" "$(target_dir)/x86_64-apple-darwin/release/libarboresce_ffi.a" -output build/swift/macos/libarboresce_ffi.a
     lipo -create "$(target_dir)/aarch64-apple-ios-sim/release/libarboresce_ffi.a" "$(target_dir)/x86_64-apple-ios/release/libarboresce_ffi.a" -output build/swift/simulator/libarboresce_ffi.a
+    cp "$(target_dir)/aarch64-apple-ios/release/libarboresce_ffi.a" build/swift/ios/
+    xcrun strip -S build/swift/macos/libarboresce_ffi.a build/swift/simulator/libarboresce_ffi.a build/swift/ios/libarboresce_ffi.a
     rm -rf build/swift/Arboresce.xcframework
     xcodebuild -create-xcframework \
       -library "$ROOT/build/swift/macos/libarboresce_ffi.a" -headers "$ROOT/build/swift/include" \
       -library "$ROOT/build/swift/simulator/libarboresce_ffi.a" -headers "$ROOT/build/swift/include" \
-      -library "$(target_dir)/aarch64-apple-ios/release/libarboresce_ffi.a" -headers "$ROOT/build/swift/include" \
+      -library "$ROOT/build/swift/ios/libarboresce_ffi.a" -headers "$ROOT/build/swift/include" \
       -output "$ROOT/build/swift/Arboresce.xcframework"
     swift_inventory > build/swift/receipt.txt
 )
@@ -346,9 +353,10 @@ build_android() {
             armv7-*) abi=armeabi-v7a ;;
             x86_64-*) abi=x86_64 ;;
         esac
-        RUSTFLAGS="-C link-arg=-Wl,-z,max-page-size=$alignment" cargo build --locked --release -p arboresce-ffi --target "$target"
+        CARGO_ENCODED_RUSTFLAGS="$(rust_flags "-Clink-arg=-Wl,-z,max-page-size=$alignment")" cargo build --locked --release -p arboresce-ffi --target "$target"
         mkdir -p "build/android/jni/$abi"
         cp "$(target_dir)/$target/release/libarboresce_ffi.so" "build/android/jni/$abi/"
+        "$ndk/llvm-strip" --strip-debug --remove-section=.comment "build/android/jni/$abi/libarboresce_ffi.so"
         "$ndk/llvm-readelf" -l "build/android/jni/$abi/libarboresce_ffi.so" > "build/android/$abi-elf.txt"
     done
 }

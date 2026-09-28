@@ -15,6 +15,7 @@ target_dir() { printf '%s\n' "$TARGET_ROOT"; }
 die() { printf '%s\n' "$*" >&2; exit 1; }
 rustc() { printf 'rustc fixture\nhost: %s\n' "$HOST"; }
 cmake() { :; }
+xcrun() { [[ "$1 $2" == "strip -S" ]]; }
 uv() { :; }
 cargo() {
     local target artifact
@@ -23,6 +24,7 @@ cargo() {
             printf '{"packages":[{"name":"arboresce-c","version":"0.0.0"}]}\n'
             ;;
         rustc)
+            printf '%s' "$CARGO_ENCODED_RUSTFLAGS" > "$ROOT/rust-flags"
             target=${CARGO_BUILD_TARGET:-$HOST}
             while [[ $# -gt 0 ]]; do
                 if [[ "$1" == --target ]]; then
@@ -41,6 +43,10 @@ cargo() {
         *) return 1 ;;
     esac
 }
+
+# shellcheck source=scripts/rust.sh
+source "$(dirname "$NATIVE_SOURCE")/rust.sh"
+prepare_rust_flags
 
 # shellcheck source=scripts/native.sh
 source "$NATIVE_SOURCE"

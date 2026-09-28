@@ -54,6 +54,7 @@ def source_inputs(sdk):
         "DEVELOPERS.md",
         "scripts/make.sh",
         "scripts/native.sh",
+        "scripts/rust.sh",
         "tests/consumers/native_packages.py",
     }
     for directory in ("crates/c", "bindings/c", "bindings/cpp"):

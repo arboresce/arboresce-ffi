@@ -500,3 +500,18 @@ assertions against existing packages without rebuilding SDK libraries. Set
 `ARBORESCE_PACKAGE_ROOT` to the prepared artifact directory; it defaults to
 `build/dist`. These checks require the same host runtimes as their build-and-test
 counterparts and fail when a required artifact or runtime is unavailable.
+
+Rust commands invoked through Make preserve `CARGO_ENCODED_RUSTFLAGS` (or split
+`RUSTFLAGS` on whitespace when the encoded variable is absent), then append
+source-path remapping for the SDK, Cargo and Rustup homes, build output and user
+home. These command-scoped flags take precedence over Cargo configuration flags.
+C builds enforce PIC and unwinding, and Android builds append 16 KB linker alignment without
+discarding those flags. Remapping is best-effort; inspect final artifacts for
+paths introduced by linkers, build scripts and other tools.
+Apple static archives have debug symbols removed from staged copies with
+`xcrun strip -S` before packaging and provenance recording. Cargo cache artifacts
+are preserved. This also removes build paths embedded in precompiled runtime
+objects supplied by the Rust toolchain.
+The FFI dynamic library uses an `@rpath` install name on Apple platforms. Android
+packaging strips debug and `.comment` metadata from staged ELF libraries before
+checking alignment; runtime load segments and exported symbols are retained.

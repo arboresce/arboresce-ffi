@@ -2,7 +2,7 @@
 import PackageDescription
 
 let releaseTag = "0.0.0"
-let releaseChecksum = "4723ba7fe8372403b5602a3b83d5a645eb8e8b0dd3d16dde33621cd6d1472a6b"
+let releaseChecksum = "ac5ce97d8bfdcf21fdcc1ef09bf1a21bea6f975d4a3f3c8c97025557b837736f"
 
 let package = Package(
   name: "Arboresce",

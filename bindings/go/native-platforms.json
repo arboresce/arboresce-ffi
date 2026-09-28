@@ -8,10 +8,12 @@
   },
   "source_files": [
     "scripts/make.sh",
+    "scripts/rust.sh",
     "Cargo.toml",
     "Cargo.lock",
     "rust-toolchain.toml",
     "crates/ffi/Cargo.toml",
+    "crates/ffi/build.rs",
     "crates/ffi/src/lib.rs",
     "crates/ffi/uniffi.toml",
     "crates/ffi/go-bindgen.json",

@@ -126,7 +126,16 @@ class NativeArtifacts(unittest.TestCase):
             self.package()
 
     def test_target_override_cannot_repackage_stale_default_artifacts(self):
-        for ambient_target in (native.host_target(), "different-ambient-target"):
+        for ambient_target, flag_environment in (
+            (
+                native.host_target(),
+                {"CARGO_ENCODED_RUSTFLAGS": "--cfg=retained_flag\x1f-Cpanic=abort"},
+            ),
+            (
+                "different-ambient-target",
+                {"RUSTFLAGS": "--cfg=retained_flag -Cpanic=abort"},
+            ),
+        ):
             with self.subTest(ambient_target=ambient_target):
                 root = self.root / ambient_target
                 result = subprocess.run(
@@ -137,7 +146,15 @@ class NativeArtifacts(unittest.TestCase):
                         str(SDK / "scripts/native.sh"),
                         native.host_target(),
                     ],
-                    env=dict(os.environ, CARGO_BUILD_TARGET=ambient_target),
+                    env=dict(
+                        {
+                            key: value
+                            for key, value in os.environ.items()
+                            if key not in {"CARGO_ENCODED_RUSTFLAGS", "RUSTFLAGS"}
+                        },
+                        CARGO_BUILD_TARGET=ambient_target,
+                        **flag_environment,
+                    ),
                     capture_output=True,
                     text=True,
                     timeout=30,
@@ -146,6 +163,16 @@ class NativeArtifacts(unittest.TestCase):
                 self.assertEqual(
                     (root / "selected-target").read_text().strip(), native.host_target()
                 )
+                flags = (root / "rust-flags").read_text().split("\x1f")
+                self.assertEqual(flags[:2], ["--cfg=retained_flag", "-Cpanic=abort"])
+                observed = subprocess.check_output(
+                    ["rustc", *flags, "--print", "cfg"], text=True
+                )
+                self.assertIn('panic="unwind"', observed.splitlines())
+                self.assertEqual(
+                    flags[-2:], ["-Crelocation-model=pic", "-Cpanic=unwind"]
+                )
+                self.assertIn(f"--remap-path-prefix={root}=/src/arboresce-ffi", flags)
                 for name in ("libarboresce_c.a", self.shared):
                     self.assertEqual(
                         (root / "build/native/stage" / name).read_bytes(),

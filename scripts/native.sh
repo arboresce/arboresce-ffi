@@ -46,7 +46,7 @@ build_c() {
     local artifacts version host
     host=$(rustc -vV | sed -n 's/^host: //p')
     [[ -n "$host" ]] || die 'Rust did not report its host target'
-    CARGO_PROFILE_C_RELEASE_PANIC=unwind CARGO_ENCODED_RUSTFLAGS='-Crelocation-model=pic' cargo rustc --locked --target "$host" --profile c-release -p arboresce-c --lib -- --print native-static-libs > build/native/build.log 2>&1 || { cat build/native/build.log >&2; return 1; }
+    CARGO_PROFILE_C_RELEASE_PANIC=unwind CARGO_ENCODED_RUSTFLAGS="$(rust_flags -Crelocation-model=pic -Cpanic=unwind)" cargo rustc --locked --target "$host" --profile c-release -p arboresce-c --lib -- --print native-static-libs > build/native/build.log 2>&1 || { cat build/native/build.log >&2; return 1; }
     cat build/native/build.log
     sed -n 's/^note: native-static-libs: //p' build/native/build.log | tail -1 > build/native/stage/native-static-libs.txt
     [[ -s build/native/stage/native-static-libs.txt ]] || die 'Rust did not report the native static dependencies'
@@ -54,6 +54,7 @@ build_c() {
     cp "$artifacts/libarboresce_c.a" build/native/stage/
     case $(uname -s) in
         Darwin)
+            xcrun strip -S build/native/stage/libarboresce_c.a
             cp "$artifacts/libarboresce_c.dylib" build/native/stage/libarboresce_c.1.dylib
             ln -sf libarboresce_c.1.dylib build/native/stage/libarboresce_c.dylib
             ;;
