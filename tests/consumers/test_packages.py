@@ -4,7 +4,7 @@ import unittest
 import zipfile
 from pathlib import Path
 
-from package_tools import digest, distribution_files, package_go
+from package_tools import digest, distribution_files, package_go, write_go_proxy
 
 
 class GoDistributionTests(unittest.TestCase):
@@ -21,9 +21,7 @@ class GoDistributionTests(unittest.TestCase):
         (self.sdk / "rust-toolchain.toml").write_text(
             '[toolchain]\nchannel = "1.98.1"\n'
         )
-        (self.module / "go.mod").write_text(
-            "module github.com/arboresce/arboresce-ffi/bindings/go\n\ngo 1.27.1\n"
-        )
+        (self.module / "go.mod").write_text("module arboresce.ai\n\ngo 1.27.1\n")
         self.generator = {
             "version": "test",
             "revision": "b" * 40,
@@ -85,18 +83,14 @@ class GoDistributionTests(unittest.TestCase):
         (self.module / "api_test.go").write_text("package arboresce_test\n")
         first = self.sdk / "first.zip"
         second = self.sdk / "second.zip"
-        package_go(
-            self.sdk, first, "github.com/arboresce/arboresce-ffi/bindings/go@v0.0.0"
-        )
-        package_go(
-            self.sdk, second, "github.com/arboresce/arboresce-ffi/bindings/go@v0.0.0"
-        )
+        package_go(self.sdk, first, "arboresce.ai@v0.0.0")
+        package_go(self.sdk, second, "arboresce.ai@v0.0.0")
         self.assertEqual(first.read_bytes(), second.read_bytes())
         with zipfile.ZipFile(first) as archive:
             self.assertEqual(
                 set(archive.namelist()),
                 {
-                    f"github.com/arboresce/arboresce-ffi/bindings/go@v0.0.0/{name}"
+                    f"arboresce.ai@v0.0.0/{name}"
                     for name in distribution_files(self.sdk)
                 },
             )
@@ -110,6 +104,27 @@ class GoDistributionTests(unittest.TestCase):
             ValueError, "Invalid or missing Go distribution file"
         ):
             distribution_files(self.sdk)
+
+    def test_go_proxy_uses_the_vanity_module_identity(self):
+        files = distribution_files(self.sdk)
+        root = self.sdk / "proxy"
+        write_go_proxy(files, root, "0.0.0")
+        proxy = root / "arboresce.ai/@v"
+        self.assertEqual(
+            {path.name for path in proxy.iterdir()},
+            {"v0.0.0.zip", "v0.0.0.mod", "v0.0.0.info", "list"},
+        )
+        self.assertEqual(
+            (proxy / "v0.0.0.mod").read_bytes(), files["go.mod"].read_bytes()
+        )
+        self.assertEqual(
+            json.loads((proxy / "v0.0.0.info").read_text())["Version"], "v0.0.0"
+        )
+        with zipfile.ZipFile(proxy / "v0.0.0.zip") as archive:
+            self.assertEqual(
+                set(archive.namelist()),
+                {"arboresce.ai@v0.0.0/" + name for name in files},
+            )
 
     def test_corrupt_native_archive_is_rejected(self):
         self.archives[0].write_bytes(b"corrupt")

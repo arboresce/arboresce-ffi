@@ -1,6 +1,6 @@
 package arboresce
 
-import native "github.com/arboresce/arboresce-ffi/bindings/go/internal/native"
+import native "arboresce.ai/internal/native"
 
 const Name = "Arboresce"
 

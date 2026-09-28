@@ -1,3 +1,3 @@
-module github.com/arboresce/arboresce-ffi/bindings/go
+module arboresce.ai
 
 go 1.27.1

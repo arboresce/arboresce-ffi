@@ -123,12 +123,12 @@ def package_go(sdk, destination, prefix):
 
 
 def write_go_proxy(files, root, release, timestamp="2026-01-01T00:00:00Z"):
-    proxy = root / "github.com/arboresce/arboresce-ffi/bindings/go/@v"
+    proxy = root / "arboresce.ai/@v"
     proxy.mkdir(parents=True, exist_ok=True)
     write_zip(
         files,
         proxy / f"v{release}.zip",
-        f"github.com/arboresce/arboresce-ffi/bindings/go@v{release}",
+        f"arboresce.ai@v{release}",
     )
     shutil.copyfile(files["go.mod"], proxy / f"v{release}.mod")
     (proxy / f"v{release}.info").write_text(
@@ -187,7 +187,7 @@ def test_go_consumer(sdk=SDK, artifacts=None):
             "GOMODCACHE": str(root / "cache"),
         }
         run(
-            ["go", "mod", "download", "github.com/arboresce/arboresce-ffi/bindings/go"],
+            ["go", "mod", "download", "arboresce.ai"],
             cwd=consumer,
             env=env,
         )

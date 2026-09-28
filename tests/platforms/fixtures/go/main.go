@@ -3,7 +3,7 @@ package main
 import (
 	"sync"
 
-	"github.com/arboresce/arboresce-ffi/bindings/go"
+	"arboresce.ai"
 )
 
 func main() {
