@@ -38,6 +38,8 @@
     "native-platforms.json",
     "internal/native/link.go",
     "internal/native/arboresce_ffi.go",
-    "internal/native/native.h"
+    "internal/native/native.h",
+    "api_test.go",
+    "testdata/print-name/main.go"
   ]
 }

@@ -122,13 +122,17 @@ def package_go(sdk, destination, prefix):
     write_zip(distribution_files(sdk), destination, prefix)
 
 
-def write_go_proxy(files, root, release):
-    proxy = root / "arboresce.ai/@v"
+def write_go_proxy(files, root, release, timestamp="2026-01-01T00:00:00Z"):
+    proxy = root / "github.com/arboresce/arboresce-ffi/bindings/go/@v"
     proxy.mkdir(parents=True, exist_ok=True)
-    write_zip(files, proxy / f"v{release}.zip", f"arboresce.ai@v{release}")
+    write_zip(
+        files,
+        proxy / f"v{release}.zip",
+        f"github.com/arboresce/arboresce-ffi/bindings/go@v{release}",
+    )
     shutil.copyfile(files["go.mod"], proxy / f"v{release}.mod")
     (proxy / f"v{release}.info").write_text(
-        json.dumps({"Version": f"v{release}", "Time": "2026-01-01T00:00:00Z"}) + "\n"
+        json.dumps({"Version": f"v{release}", "Time": timestamp}) + "\n"
     )
     (proxy / "list").write_text(f"v{release}\n")
 
@@ -182,7 +186,11 @@ def test_go_consumer(sdk=SDK, artifacts=None):
             "GOPRIVATE": "",
             "GOMODCACHE": str(root / "cache"),
         }
-        run(["go", "mod", "download", "arboresce.ai"], cwd=consumer, env=env)
+        run(
+            ["go", "mod", "download", "github.com/arboresce/arboresce-ffi/bindings/go"],
+            cwd=consumer,
+            env=env,
+        )
         run(["go", "test", "-race", "-count=1", "-v", "./..."], cwd=consumer, env=env)
     run(
         [

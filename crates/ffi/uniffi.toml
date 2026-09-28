@@ -12,4 +12,4 @@ generate_module_map = true
 
 [bindings.go]
 package_name = "native"
-go_mod = "arboresce.ai/internal/native"
+go_mod = "github.com/arboresce/arboresce-ffi/bindings/go/internal/native"

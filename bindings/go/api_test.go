@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"arboresce.ai"
+	"github.com/arboresce/arboresce-ffi/bindings/go"
 )
 
 func TestIdentity(t *testing.T) {

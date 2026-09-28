@@ -21,7 +21,9 @@ class GoDistributionTests(unittest.TestCase):
         (self.sdk / "rust-toolchain.toml").write_text(
             '[toolchain]\nchannel = "1.98.1"\n'
         )
-        (self.module / "go.mod").write_text("module arboresce.ai\n\ngo 1.27.1\n")
+        (self.module / "go.mod").write_text(
+            "module github.com/arboresce/arboresce-ffi/bindings/go\n\ngo 1.27.1\n"
+        )
         self.generator = {
             "version": "test",
             "revision": "b" * 40,
@@ -83,14 +85,18 @@ class GoDistributionTests(unittest.TestCase):
         (self.module / "api_test.go").write_text("package arboresce_test\n")
         first = self.sdk / "first.zip"
         second = self.sdk / "second.zip"
-        package_go(self.sdk, first, "arboresce.ai@v0.0.0")
-        package_go(self.sdk, second, "arboresce.ai@v0.0.0")
+        package_go(
+            self.sdk, first, "github.com/arboresce/arboresce-ffi/bindings/go@v0.0.0"
+        )
+        package_go(
+            self.sdk, second, "github.com/arboresce/arboresce-ffi/bindings/go@v0.0.0"
+        )
         self.assertEqual(first.read_bytes(), second.read_bytes())
         with zipfile.ZipFile(first) as archive:
             self.assertEqual(
                 set(archive.namelist()),
                 {
-                    f"arboresce.ai@v0.0.0/{name}"
+                    f"github.com/arboresce/arboresce-ffi/bindings/go@v0.0.0/{name}"
                     for name in distribution_files(self.sdk)
                 },
             )

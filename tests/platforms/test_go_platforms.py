@@ -1,3 +1,4 @@
+import importlib.util
 import os
 import platform
 import shutil
@@ -13,12 +14,26 @@ SDK = Path(__file__).resolve().parents[2]
 
 class GoPlatforms(unittest.TestCase):
     module = SDK / "bindings/go"
+    module_time = "2026-01-01T00:00:00Z"
+    module_identity = {}
+
+    def proxy_files(self, module):
+        return self.package_tools.distribution_files(SDK, module)
 
     def test_platform_consumers_and_failures(self):
         with tempfile.TemporaryDirectory(prefix="arboresce-go-matrix-") as temporary:
             root = Path(temporary)
             module = root / "arboresce-go-0.0.0"
             shutil.copytree(self.module, module)
+            spec = importlib.util.spec_from_file_location(
+                "go_package_tools", SDK / "tests/consumers/package_tools.py"
+            )
+            self.package_tools = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(self.package_tools)
+            proxy = root / "proxy"
+            self.package_tools.write_go_proxy(
+                self.proxy_files(module), proxy, "0.0.0", self.module_time
+            )
             consumer = root / "consumer"
             shutil.copytree(SDK / "tests/platforms/fixtures/go", consumer)
             matrix = [
@@ -36,10 +51,18 @@ class GoPlatforms(unittest.TestCase):
                         CGO_ENABLED="1",
                         CC=compiler,
                         GOWORK="off",
+                        GOENV="off",
+                        GOPROXY=proxy.as_uri(),
+                        GOSUMDB="off",
+                        GONOPROXY="",
+                        GONOSUMDB="",
+                        GOPRIVATE="",
+                        GOMODCACHE=str(root / f"cache-{system}-{arch}"),
+                        GOCACHE=str(root / f"build-cache-{system}-{arch}"),
                     )
                     binary = root / f"consumer-{system}-{arch}"
                     result = subprocess.run(
-                        ["go", "build", "-o", str(binary), "."],
+                        ["go", "build", "-mod=mod", "-o", str(binary), "."],
                         cwd=consumer,
                         env=env,
                         capture_output=True,
@@ -84,10 +107,9 @@ class GoPlatforms(unittest.TestCase):
                     runtime["go"] = subprocess.check_output(
                         ["go", "version"], text=True
                     ).strip()
+                    runtime.update(self.module_identity)
                     record("go", target, mode, runtime, cpu=arch)
-            env = dict(
-                os.environ, GOOS="darwin", GOARCH="arm64", CGO_ENABLED="0", GOWORK="off"
-            )
+            env.update(GOOS="darwin", GOARCH="arm64", CGO_ENABLED="0", GOWORK="off")
             result = subprocess.run(
                 ["go", "build", "."],
                 cwd=consumer,
@@ -98,9 +120,19 @@ class GoPlatforms(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("build constraints", result.stderr)
             (module / "internal/native/lib/darwin_arm64/libarboresce_ffi.a").unlink()
-            env.update(CGO_ENABLED="1", CC="clang -arch arm64")
+            files = {
+                name: path
+                for name, path in self.proxy_files_for_failure(module).items()
+            }
+            self.package_tools.write_go_proxy(files, proxy, "0.0.0", self.module_time)
+            (consumer / "go.sum").unlink(missing_ok=True)
+            env.update(
+                CGO_ENABLED="1",
+                CC="clang -arch arm64",
+                GOMODCACHE=str(root / "missing-cache"),
+            )
             result = subprocess.run(
-                ["go", "build", "-o", str(root / "missing"), "."],
+                ["go", "build", "-mod=mod", "-o", str(root / "missing"), "."],
                 cwd=consumer,
                 env=env,
                 capture_output=True,
@@ -118,3 +150,10 @@ class GoPlatforms(unittest.TestCase):
             )
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("unsupported", result.stderr.lower())
+
+    def proxy_files_for_failure(self, module):
+        return {
+            p.relative_to(module).as_posix(): p
+            for p in module.rglob("*")
+            if p.is_file()
+        }

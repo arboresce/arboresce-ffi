@@ -45,8 +45,10 @@ copy its implementation here or use floating/path release dependencies. Rust
 uses edition 2024 and resolver 3. The workspace version in `Cargo.toml` owns the
 SDK version; language package versions must agree. Core and FFI repositories
 retain separate histories. Preserve the [package identities](#package-identities);
-Go uses `arboresce.ai` for v0/v1 and major-version suffixes from v2, with a
-generated distribution mirror.
+Go uses `github.com/arboresce/arboresce-ffi/bindings/go` for v0/v1
+and major-version suffixes from v2. Version tags use `bindings/go/v<version>`
+in this repository. Published module snapshots add the required native archives;
+`master` remains source-only.
 
 ## Package identities
 
@@ -55,7 +57,7 @@ generated distribution mirror.
 | Rust | `cargo add arboresce` |
 | TypeScript | `npm install arboresce` |
 | Python | `uv add arboresce` |
-| Go | `go get arboresce.ai` |
+| Go | `go get github.com/arboresce/arboresce-ffi/bindings/go` |
 | Swift | `import Arboresce` |
 | Kotlin / Java | `implementation("ai.arboresce:arboresce:<version>")` |
 | C | `#include <arboresce/arboresce.h>` |

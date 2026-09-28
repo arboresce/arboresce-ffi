@@ -3,13 +3,13 @@
 Go SDK for Arboresce.
 
 ```bash
-go get arboresce.ai@v0.0.0
+go get github.com/arboresce/arboresce-ffi/bindings/go@v0.0.0
 ```
 
 ```go
 package main
 
-import "arboresce.ai"
+import "github.com/arboresce/arboresce-ffi/bindings/go"
 
 func main() {
     arboresce.PrintName()
