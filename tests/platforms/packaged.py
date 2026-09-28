@@ -37,7 +37,9 @@ def consumer_tools():
         sys.path[:] = original
 
 
-def check(language, artifacts):
+def check(language, artifacts, go_module_zip=None):
+    if go_module_zip is not None and language != "go":
+        raise ValueError("A prepared Go module ZIP requires the Go consumer")
     native, packages, swift = consumer_tools()
     artifacts = Path(artifacts).resolve(strict=True)
     release = packages.version(SDK)
@@ -47,7 +49,13 @@ def check(language, artifacts):
         root = Path(temporary)
         if language == "go":
             packages.extract_zip(artifacts / f"go/arboresce-go-{release}.zip", root)
-            run_suite(GoPlatforms, {"module": root / f"arboresce-go-{release}"})
+            run_suite(
+                GoPlatforms,
+                {
+                    "module": root / f"arboresce-go-{release}",
+                    "module_zip": go_module_zip,
+                },
+            )
         elif language in {"swift", "ios"}:
             artifact = artifacts / f"swift/arboresce-swift-{release}.zip"
             package = swift.extract_package(artifact, root / "package", release)
@@ -100,8 +108,9 @@ def main():
         "language", choices=("go", "swift", "ios", "android", "c", "cpp")
     )
     parser.add_argument("--artifacts", type=Path, required=True)
+    parser.add_argument("--go-module-zip", type=Path)
     arguments = parser.parse_args()
-    check(arguments.language, arguments.artifacts)
+    check(arguments.language, arguments.artifacts, arguments.go_module_zip)
 
 
 if __name__ == "__main__":

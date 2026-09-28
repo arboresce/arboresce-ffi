@@ -18,6 +18,7 @@ import packaged
 import runtime_evidence
 import swift_package
 import test_android
+import test_go_platforms
 import test_ios
 
 
@@ -79,6 +80,74 @@ class RuntimeEvidence(unittest.TestCase):
             check=True,
             capture_output=True,
         )
+
+
+class GoModuleInput(unittest.TestCase):
+    def archive(self, path, entries):
+        with warnings.catch_warnings(), zipfile.ZipFile(path, "w") as archive:
+            warnings.simplefilter("ignore", UserWarning)
+            for name, value in entries:
+                archive.writestr(name, value)
+
+    def test_rejects_changed_missing_extra_and_duplicate_members(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            generated, supplied = root / "generated.zip", root / "supplied.zip"
+            expected = [("arboresce.ai@v0.0.0/go.mod", b"module arboresce.ai")]
+            self.archive(generated, expected)
+            before = generated.read_bytes()
+            for entries in (
+                [],
+                expected * 2,
+                [(expected[0][0], b"changed")],
+                expected + [("extra", b"")],
+            ):
+                with self.subTest(entries=entries):
+                    self.archive(supplied, entries)
+                    with self.assertRaises(ValueError):
+                        test_go_platforms.copy_module_zip(supplied, generated)
+                    self.assertEqual(generated.read_bytes(), before)
+
+    def test_consumes_validated_snapshot_despite_external_replacement(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            generated, supplied = root / "generated.zip", root / "supplied.zip"
+            entries = [("arboresce.ai@v0.0.0/go.mod", b"module arboresce.ai")]
+            self.archive(generated, entries)
+            self.archive(supplied, entries)
+            with zipfile.ZipFile(supplied, "a") as archive:
+                archive.comment = b"retained canonical metadata"
+            expected = supplied.read_bytes()
+            original = Path.write_bytes
+
+            def replace(path, content):
+                original(supplied, b"replaced external input")
+                return original(path, content)
+
+            with patch.object(Path, "write_bytes", replace):
+                test_go_platforms.copy_module_zip(supplied, generated)
+            self.assertEqual(generated.read_bytes(), expected)
+            self.assertEqual(supplied.read_bytes(), b"replaced external input")
+
+    def test_isolates_hostile_go_environment(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            with patch.dict(
+                os.environ,
+                {
+                    "GOFLAGS": "-modfile=/tmp/other.mod -overlay=/tmp/other.json",
+                    "GOTOOLCHAIN": "go1.99.0+auto",
+                    "GOPROXY": "https://unrelated.invalid",
+                    "GOMODCACHE": "/tmp/ambient-cache",
+                },
+            ):
+                env = test_go_platforms.consumer_environment(
+                    root, root / "proxy", "linux", "amd64", "cc"
+                )
+            self.assertEqual(env["GOFLAGS"], "")
+            self.assertEqual(env["GOTOOLCHAIN"], "local")
+            self.assertEqual(env["GOPROXY"], (root / "proxy").as_uri())
+            self.assertEqual(env["GOMODCACHE"], str(root / "cache-linux-amd64"))
 
 
 class AndroidSelection(unittest.TestCase):
@@ -362,6 +431,24 @@ class SwiftStaging(unittest.TestCase):
 
 
 class PackagedPlatformCommands(unittest.TestCase):
+    def test_go_module_zip_cannot_be_silently_ignored_by_other_consumers(self):
+        with self.assertRaisesRegex(ValueError, "requires the Go consumer"):
+            packaged.check("swift", Path("unused"), Path("module.zip"))
+
+    def test_prepared_go_module_zip_is_passed_to_isolated_suite(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            _, packages, _ = packaged.consumer_tools()
+            with (
+                patch.object(packages, "extract_zip"),
+                patch("packaged.run_suite") as suite,
+            ):
+                packaged.check("go", root, root / "canonical.zip")
+            self.assertEqual(
+                suite.call_args.args[1]["module_zip"], root / "canonical.zip"
+            )
+            self.assertIsNone(packaged.GoPlatforms.module_zip)
+
     def test_missing_artifacts_fail_without_runtime_or_build_commands(self):
         with tempfile.TemporaryDirectory() as temporary:
             for language in ("go", "swift", "ios", "android", "c", "cpp"):

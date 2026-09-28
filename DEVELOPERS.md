@@ -118,6 +118,17 @@ signing, registry uploads, release promotion and frozen release evidence are
 maintained externally. Release qualification reuses these test sources against
 isolated packages. Build output remains ignored.
 
+The prepared Go consumer can use an existing canonical module ZIP:
+
+```sh
+uv run --python 3.14.7 --no-project python tests/platforms/packaged.py go \
+  --artifacts /absolute/path/to/packages --go-module-zip /absolute/path/to/module.zip
+```
+
+Its contents must match the prepared Go package. Each platform downloads through
+an isolated file proxy with an empty module cache, verifies the exact ZIP bytes,
+and records the Go CLI's module and go.mod hashes with the runtime result.
+
 ## Per-language development
 
 ### Rust adapters

@@ -1,10 +1,14 @@
+import hashlib
 import importlib.util
+import io
+import json
 import os
 import platform
 import shutil
 import subprocess
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 from runtime_evidence import architecture, container_runtime, record
@@ -12,10 +16,46 @@ from runtime_evidence import architecture, container_runtime, record
 SDK = Path(__file__).resolve().parents[2]
 
 
+def copy_module_zip(source, destination):
+    content = source.read_bytes()
+    with (
+        zipfile.ZipFile(destination) as generated,
+        zipfile.ZipFile(io.BytesIO(content)) as supplied,
+    ):
+        names = supplied.namelist()
+        if len(names) != len(set(names)) or set(names) != set(generated.namelist()):
+            raise ValueError("Go module ZIP inventory differs")
+        for name in names:
+            if supplied.read(name) != generated.read(name):
+                raise ValueError("Go module ZIP payload differs")
+    destination.write_bytes(content)
+
+
+def consumer_environment(root, proxy, system, arch, compiler):
+    return dict(
+        os.environ,
+        GOOS=system,
+        GOARCH=arch,
+        CGO_ENABLED="1",
+        CC=compiler,
+        GOWORK="off",
+        GOENV="off",
+        GOFLAGS="",
+        GOTOOLCHAIN="local",
+        GOPROXY=proxy.as_uri(),
+        GOSUMDB="off",
+        GONOPROXY="",
+        GONOSUMDB="",
+        GOPRIVATE="",
+        GOMODCACHE=str(root / f"cache-{system}-{arch}"),
+        GOCACHE=str(root / f"build-cache-{system}-{arch}"),
+    )
+
+
 class GoPlatforms(unittest.TestCase):
     module = SDK / "bindings/go"
     module_time = "2026-01-01T00:00:00Z"
-    module_identity = {}
+    module_zip = None
 
     def proxy_files(self, module):
         return self.package_tools.distribution_files(SDK, module)
@@ -23,19 +63,30 @@ class GoPlatforms(unittest.TestCase):
     def test_platform_consumers_and_failures(self):
         with tempfile.TemporaryDirectory(prefix="arboresce-go-matrix-") as temporary:
             root = Path(temporary)
-            module = root / "arboresce-go-0.0.0"
+            module = root / "module"
             shutil.copytree(self.module, module)
             spec = importlib.util.spec_from_file_location(
                 "go_package_tools", SDK / "tests/consumers/package_tools.py"
             )
             self.package_tools = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(self.package_tools)
+            release = self.package_tools.version(SDK)
             proxy = root / "proxy"
             self.package_tools.write_go_proxy(
-                self.proxy_files(module), proxy, "0.0.0", self.module_time
+                self.proxy_files(module), proxy, release, self.module_time
             )
+            archive = proxy / "arboresce.ai/@v" / f"v{release}.zip"
+            if self.module_zip is not None:
+                copy_module_zip(self.module_zip, archive)
+            expected_zip = hashlib.sha256(archive.read_bytes()).hexdigest()
             consumer = root / "consumer"
             shutil.copytree(SDK / "tests/platforms/fixtures/go", consumer)
+            manifest = consumer / "go.mod"
+            manifest.write_text(
+                manifest.read_text().replace(
+                    "require arboresce.ai v0.0.0", f"require arboresce.ai v{release}"
+                )
+            )
             matrix = [
                 ("darwin", "arm64", "clang -arch arm64"),
                 ("darwin", "amd64", "clang -arch x86_64"),
@@ -44,21 +95,23 @@ class GoPlatforms(unittest.TestCase):
             ]
             for system, arch, compiler in matrix:
                 with self.subTest(platform=f"{system}_{arch}"):
-                    env = dict(
-                        os.environ,
-                        GOOS=system,
-                        GOARCH=arch,
-                        CGO_ENABLED="1",
-                        CC=compiler,
-                        GOWORK="off",
-                        GOENV="off",
-                        GOPROXY=proxy.as_uri(),
-                        GOSUMDB="off",
-                        GONOPROXY="",
-                        GONOSUMDB="",
-                        GOPRIVATE="",
-                        GOMODCACHE=str(root / f"cache-{system}-{arch}"),
-                        GOCACHE=str(root / f"build-cache-{system}-{arch}"),
+                    env = consumer_environment(root, proxy, system, arch, compiler)
+                    download = subprocess.run(
+                        ["go", "mod", "download", "-json", f"arboresce.ai@v{release}"],
+                        cwd=consumer,
+                        env=env,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(download.returncode, 0, download.stderr)
+                    identity = json.loads(download.stdout)
+                    self.assertEqual(identity["Path"], "arboresce.ai")
+                    self.assertEqual(identity["Version"], "v" + release)
+                    self.assertTrue(identity["Sum"].startswith("h1:"))
+                    self.assertTrue(identity["GoModSum"].startswith("h1:"))
+                    self.assertEqual(
+                        hashlib.sha256(Path(identity["Zip"]).read_bytes()).hexdigest(),
+                        expected_zip,
                     )
                     binary = root / f"consumer-{system}-{arch}"
                     result = subprocess.run(
@@ -105,9 +158,16 @@ class GoPlatforms(unittest.TestCase):
                             "node:22.22.3-bookworm-slim", arch
                         )
                     runtime["go"] = subprocess.check_output(
-                        ["go", "version"], text=True
+                        ["go", "version"], cwd=consumer, env=env, text=True
                     ).strip()
-                    runtime.update(self.module_identity)
+                    runtime.update(
+                        module=identity["Path"],
+                        module_version=identity["Version"],
+                        module_h1=identity["Sum"],
+                        go_mod_h1=identity["GoModSum"],
+                        module_zip_sha256=expected_zip,
+                        retrieval="isolated-proxy-empty-cache",
+                    )
                     record("go", target, mode, runtime, cpu=arch)
             env.update(GOOS="darwin", GOARCH="arm64", CGO_ENABLED="0", GOWORK="off")
             result = subprocess.run(
@@ -124,7 +184,7 @@ class GoPlatforms(unittest.TestCase):
                 name: path
                 for name, path in self.proxy_files_for_failure(module).items()
             }
-            self.package_tools.write_go_proxy(files, proxy, "0.0.0", self.module_time)
+            self.package_tools.write_go_proxy(files, proxy, release, self.module_time)
             (consumer / "go.sum").unlink(missing_ok=True)
             env.update(
                 CGO_ENABLED="1",
