@@ -531,7 +531,8 @@ def qualify_packages(sdk, c_archive, cpp_archive=None):
                 {"package": prefix, "fixtures": sdk / "bindings"},
             )
             suite.addTests(loader.loadTestsFromTestCase(fixture))
-        if not unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful():
+        result = unittest.TextTestRunner(verbosity=2).run(suite)
+        if not result.wasSuccessful() or result.skipped or not result.testsRun:
             raise AssertionError("Installed native package qualification failed")
 
 

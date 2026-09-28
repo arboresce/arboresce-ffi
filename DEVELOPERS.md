@@ -491,3 +491,12 @@ those engine properties. Do not add constructors, handle registries, custom
 allocators or async machinery ahead of implemented core operations. Java remains
 a consumer of the existing JVM artifact. .NET is the next prospective direct
 C-ABI binding; additional language implementations are deferred.
+
+## Prepared platform consumers
+
+`test-packaged-go`, `test-packaged-swift`, `test-packaged-ios`,
+`test-packaged-android`, `test-packaged-c` and `test-packaged-cpp` run the platform
+assertions against existing packages without rebuilding SDK libraries. Set
+`ARBORESCE_PACKAGE_ROOT` to the prepared artifact directory; it defaults to
+`build/dist`. These checks require the same host runtimes as their build-and-test
+counterparts and fail when a required artifact or runtime is unavailable.

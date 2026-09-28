@@ -1,3 +1,4 @@
+import contextlib
 import io
 import json
 import os
@@ -13,6 +14,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import android_elf
+import packaged
 import runtime_evidence
 import swift_package
 import test_android
@@ -357,3 +359,76 @@ class SwiftStaging(unittest.TestCase):
     def test_failed_receipt_does_not_stage_any_package(self):
         self.assertNotEqual(self.stage(False).returncode, 0)
         self.assertFalse((self.root / "build/swift-dev").exists())
+
+
+class PackagedPlatformCommands(unittest.TestCase):
+    def test_missing_artifacts_fail_without_runtime_or_build_commands(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            for language in ("go", "swift", "ios", "android", "c", "cpp"):
+                with (
+                    self.subTest(language=language),
+                    patch("packaged.record") as evidence,
+                    patch(
+                        "subprocess.run",
+                        side_effect=AssertionError("Unexpected process"),
+                    ),
+                ):
+                    with self.assertRaises(FileNotFoundError):
+                        packaged.check(language, Path(temporary))
+                    evidence.assert_not_called()
+
+    def test_suite_uses_isolated_attributes_and_preserves_original_fixture(self):
+        class Fixture(unittest.TestCase):
+            value = "original"
+
+            def test_value(self):
+                self.assertEqual(self.value, "packaged")
+
+        with contextlib.redirect_stderr(io.StringIO()):
+            packaged.run_suite(Fixture, {"value": "packaged"})
+        self.assertEqual(Fixture.value, "original")
+
+    def test_failed_skipped_and_empty_suites_cannot_pass(self):
+        class Failed(unittest.TestCase):
+            def test_failed(self):
+                self.fail("fixture failure")
+
+        class Skipped(unittest.TestCase):
+            @unittest.skip("fixture missing prerequisite")
+            def test_skipped(self):
+                pass
+
+        class Empty(unittest.TestCase):
+            pass
+
+        for fixture in (Failed, Skipped, Empty):
+            with (
+                self.subTest(fixture=fixture),
+                contextlib.redirect_stderr(io.StringIO()),
+                self.assertRaisesRegex(AssertionError, "Packaged platform"),
+            ):
+                packaged.run_suite(fixture, {})
+
+    def test_native_empty_skipped_and_failed_suites_emit_no_runtime_evidence(self):
+        native_packages, _, _ = packaged.consumer_tools()
+
+        for language in ("c", "cpp"):
+            for outcome in ("empty", "skipped", "failed"):
+                result = unittest.TestResult()
+                if outcome != "empty":
+                    result.testsRun = 1
+                if outcome == "skipped":
+                    result.skipped = [("fixture", "missing prerequisite")]
+                if outcome == "failed":
+                    result.failures = [("fixture", "failed assertion")]
+                with (
+                    self.subTest(language=language, outcome=outcome),
+                    tempfile.TemporaryDirectory() as temporary,
+                    patch.object(native_packages, "extract_native"),
+                    patch.object(native_packages, "verify_native_artifacts"),
+                    patch("unittest.TextTestRunner.run", return_value=result),
+                    patch("packaged.record") as evidence,
+                ):
+                    with self.assertRaisesRegex(AssertionError, "Installed native"):
+                        packaged.check(language, Path(temporary))
+                    evidence.assert_not_called()

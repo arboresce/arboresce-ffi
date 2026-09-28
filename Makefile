@@ -213,3 +213,7 @@ setup-checks setup-c setup-cpp doctor-c doctor-cpp generate-c check-generated-c 
 .PHONY: test-tooling
 test-tooling:
 	@bash scripts/make.sh test-tooling
+
+.PHONY: test-packaged-go test-packaged-swift test-packaged-ios test-packaged-android test-packaged-c test-packaged-cpp
+test-packaged-go test-packaged-swift test-packaged-ios test-packaged-android test-packaged-c test-packaged-cpp:
+	@bash scripts/make.sh $@

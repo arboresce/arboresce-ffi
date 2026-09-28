@@ -10,7 +10,12 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        maven { url = uri("repository") }
+        if (file("repository").isDirectory) {
+            exclusiveContent {
+                forRepository { maven { url = uri("repository") } }
+                filter { includeGroup("ai.arboresce") }
+            }
+        }
     }
 }
 

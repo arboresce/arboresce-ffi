@@ -118,6 +118,7 @@ class AndroidConsumer(unittest.TestCase):
         )
     )
     repository_archive = None
+    repository_directory = None
     sdk = SDK
 
     def checked(self, command, **kwargs):
@@ -151,7 +152,9 @@ class AndroidConsumer(unittest.TestCase):
                 project,
                 ignore=shutil.ignore_patterns("build", ".gradle", ".kotlin"),
             )
-            if self.repository_archive is not None:
+            if self.repository_directory is not None:
+                shutil.copytree(self.repository_directory, project / "repository")
+            elif self.repository_archive is not None:
                 with zipfile.ZipFile(self.repository_archive) as archive:
                     archive.extractall(project / "repository")
             env = dict(
