@@ -81,6 +81,12 @@ class GoPlatforms(unittest.TestCase):
             expected_zip = hashlib.sha256(archive.read_bytes()).hexdigest()
             consumer = root / "consumer"
             shutil.copytree(SDK / "tests/platforms/fixtures/go", consumer)
+            (consumer / "api_test.go").write_text(
+                (SDK / "bindings/go/api_test.go")
+                .read_text()
+                .replace("package arboresce_test", "package main_test", 1)
+            )
+            shutil.copytree(SDK / "bindings/go/testdata", consumer / "testdata")
             manifest = consumer / "go.mod"
             manifest.write_text(
                 manifest.read_text().replace(
@@ -122,6 +128,18 @@ class GoPlatforms(unittest.TestCase):
                         text=True,
                     )
                     self.assertEqual(result.returncode, 0, result.stderr)
+                    race = system == "darwin" and architecture(arch) == architecture()
+                    if race:
+                        result = subprocess.run(
+                            ["go", "test", "-race", "-count=1", "-v", "./..."],
+                            cwd=consumer,
+                            env=env,
+                            capture_output=True,
+                            text=True,
+                        )
+                        self.assertEqual(
+                            result.returncode, 0, result.stdout + result.stderr
+                        )
                     if system == "darwin":
                         command = [
                             "/usr/bin/arch",
@@ -161,6 +179,7 @@ class GoPlatforms(unittest.TestCase):
                         ["go", "version"], cwd=consumer, env=env, text=True
                     ).strip()
                     runtime.update(
+                        race_detector=race,
                         module=identity["Path"],
                         module_version=identity["Version"],
                         module_h1=identity["Sum"],

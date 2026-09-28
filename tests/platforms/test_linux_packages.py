@@ -128,6 +128,9 @@ class LinuxPackages(unittest.TestCase):
             shutil.copytree(consumer / "build/runtime", root / "runtime")
             shutil.copytree(SDK / "tests/platforms/fixtures", root / "fixtures")
             shutil.copytree(SDK / "bindings/python/tests", root / "python-tests")
+            shutil.copyfile(
+                SDK / "tests/platforms/python_runtime.py", root / "python_runtime.py"
+            )
             self.run_command(
                 ["npm", "run", "test:compile", "--prefix", SDK / "bindings/typescript"]
             )
@@ -197,7 +200,7 @@ class LinuxPackages(unittest.TestCase):
                                 runtime,
                                 cpu=architecture,
                             )
-                    code = f"python -m pip install --quiet --no-index --find-links /artifacts/dist/python arboresce=={VERSION} && python -I -m unittest discover -s /artifacts/python-tests -v"
+                    code = f"python -m pip install --quiet --no-index --find-links /artifacts/dist/python arboresce=={VERSION} && python -I /artifacts/python_runtime.py /artifacts/python-tests"
                     self.run_command(
                         base + ["python:3.14.7-slim-bookworm", "sh", "-ec", code]
                     )

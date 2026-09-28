@@ -451,10 +451,21 @@ class PackagedPlatformCommands(unittest.TestCase):
 
     def test_missing_artifacts_fail_without_runtime_or_build_commands(self):
         with tempfile.TemporaryDirectory() as temporary:
-            for language in ("go", "swift", "ios", "android", "c", "cpp"):
+            for language in (
+                "python",
+                "typescript",
+                "kotlin",
+                "go",
+                "swift",
+                "ios",
+                "android",
+                "c",
+                "cpp",
+            ):
                 with (
                     self.subTest(language=language),
                     patch("packaged.record") as evidence,
+                    patch("packaged.platform.platform", return_value="Synthetic host"),
                     patch(
                         "subprocess.run",
                         side_effect=AssertionError("Unexpected process"),
@@ -463,6 +474,185 @@ class PackagedPlatformCommands(unittest.TestCase):
                     with self.assertRaises(FileNotFoundError):
                         packaged.check(language, Path(temporary))
                     evidence.assert_not_called()
+
+    def test_host_consumers_use_prepared_packages_and_record_only_success(self):
+        _, packages, _ = packaged.consumer_tools()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for language, path, action in (
+                ("typescript", "npm/arboresce-0.0.0.tgz", "test_typescript_consumer"),
+                (
+                    "kotlin",
+                    "maven/arboresce-0.0.0-central-bundle.zip",
+                    "test_kotlin_consumer",
+                ),
+            ):
+                artifact = root / path
+                artifact.parent.mkdir(parents=True, exist_ok=True)
+                artifact.touch()
+                for failure in (False, True):
+                    with (
+                        self.subTest(language=language, failure=failure),
+                        patch.object(
+                            packages,
+                            action,
+                            side_effect=RuntimeError("failed") if failure else None,
+                        ) as consume,
+                        patch(
+                            "packaged.subprocess.check_output",
+                            return_value='{"node":"v22.22.3","architecture":"arm64","os":"darwin"}',
+                        ),
+                        patch(
+                            "packaged.subprocess.run",
+                            return_value=subprocess.CompletedProcess(
+                                [], 0, "", "Java 21\n    os.arch = aarch64\n"
+                            ),
+                        ),
+                        patch("packaged.record") as evidence,
+                        patch(
+                            "packaged.platform.platform", return_value="Synthetic host"
+                        ),
+                    ):
+                        if failure:
+                            with self.assertRaises(RuntimeError):
+                                packaged.check(language, root)
+                            evidence.assert_not_called()
+                        else:
+                            packaged.check(language, root)
+                            self.assertEqual(evidence.call_args.args[0], language)
+                            self.assertEqual(
+                                consume.call_args.kwargs["artifacts"],
+                                root / "npm" if language == "typescript" else artifact,
+                            )
+
+    def test_python_wheel_consumer_has_no_build_or_registry_fallback(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            wheels = root / "python"
+            wheels.mkdir()
+            (wheels / "prepared.whl").touch()
+            for failure in (False, True):
+
+                def execute(command, **kwargs):
+                    if failure:
+                        raise subprocess.CalledProcessError(1, "fixture")
+                    if "--identity" in command:
+                        Path(command[-1]).write_text(
+                            json.dumps(
+                                {
+                                    "python": "3.14.7",
+                                    "architecture": "arm64",
+                                    "os": "Darwin",
+                                }
+                            )
+                        )
+
+                with (
+                    patch("packaged.subprocess.run", side_effect=execute) as run,
+                    patch("packaged.record") as evidence,
+                ):
+                    if failure:
+                        with self.assertRaises(subprocess.CalledProcessError):
+                            packaged.check("python", root)
+                        evidence.assert_not_called()
+                    else:
+                        packaged.check("python", root)
+                        commands = [call.args[0] for call in run.call_args_list]
+                        self.assertEqual(len(commands), 4)
+                        self.assertIn("--no-index", commands[1])
+                        self.assertIn("--no-deps", commands[1])
+                        self.assertIn("--no-cache", commands[1])
+                        self.assertIn(str(wheels), commands[1])
+                        self.assertIn("-I", commands[2])
+                        self.assertIn(
+                            str(packaged.SDK / "tests/platforms/python_runtime.py"),
+                            commands[2],
+                        )
+                        evidence.assert_called_once()
+
+    def test_installed_python_empty_skipped_and_failed_suites_cannot_pass(self):
+        import sys
+
+        for body in (
+            "",
+            "import unittest\nclass Check(unittest.TestCase):\n @unittest.skip('unavailable')\n def test_api(self): pass\n",
+            "import unittest\nclass Check(unittest.TestCase):\n def test_api(self): self.fail('failed')\n",
+            "import unittest\nclass Check(unittest.TestCase):\n def test_api(self): pass\n",
+        ):
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                (root / "test_api.py").write_text(body)
+                identity = root / "identity.json"
+                result = subprocess.run(
+                    [
+                        sys.executable,
+                        "-I",
+                        str(packaged.SDK / "tests/platforms/python_runtime.py"),
+                        str(root),
+                        "--identity",
+                        str(identity),
+                    ],
+                    capture_output=True,
+                    text=True,
+                )
+                if body.endswith(" def test_api(self): pass\n") and "skip" not in body:
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertTrue(json.loads(identity.read_text())["architecture"])
+                else:
+                    self.assertNotEqual(result.returncode, 0)
+                    self.assertFalse(identity.exists())
+
+    def test_runtime_architecture_is_not_inferred_from_controller(self):
+        with (
+            patch("packaged.platform.system", return_value="Darwin"),
+            patch("packaged.subprocess.check_output", return_value="1\n"),
+        ):
+            self.assertEqual(
+                packaged.host_runtime("x86_64"), ("macos-x64", "rosetta", "x64")
+            )
+            self.assertEqual(
+                packaged.host_runtime("aarch64"), ("macos-arm64", "native", "arm64")
+            )
+            with self.assertRaises(ValueError):
+                packaged.host_runtime("unlisted")
+
+    def test_android_bundle_is_extracted_for_prepared_consumer(self):
+        _, packages, _ = packaged.consumer_tools()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bundle = root / "maven/arboresce-0.0.0-central-bundle.zip"
+            bundle.parent.mkdir()
+            bundle.touch()
+            with (
+                patch.object(packages, "extract_zip") as extract,
+                patch.object(packages, "validate_maven"),
+                patch("packaged.run_suite") as suite,
+            ):
+                packaged.check("android", root)
+            self.assertEqual(extract.call_args.args[0], bundle)
+            self.assertEqual(
+                suite.call_args.args[1]["repository_directory"],
+                extract.call_args.args[1],
+            )
+            self.assertNotEqual(extract.call_args.args[1], root / "maven")
+
+    def test_linux_artifact_binding_does_not_modify_suite_default(self):
+        original = packaged.LinuxPackages.artifacts
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch("packaged.run_suite") as suite,
+        ):
+            root = Path(temporary)
+            packaged.check("linux", root)
+            self.assertEqual(
+                suite.call_args.args, (packaged.LinuxPackages, {"artifacts": root})
+            )
+        self.assertEqual(packaged.LinuxPackages.artifacts, original)
+
+    def test_unknown_host_is_rejected(self):
+        with patch("packaged.platform.system", return_value="Unlisted"):
+            with self.assertRaisesRegex(ValueError, "Unsupported"):
+                packaged.host_runtime("arm64")
 
     def test_suite_uses_isolated_attributes_and_preserves_original_fixture(self):
         class Fixture(unittest.TestCase):
@@ -515,6 +705,7 @@ class PackagedPlatformCommands(unittest.TestCase):
                     patch.object(native_packages, "verify_native_artifacts"),
                     patch("unittest.TextTestRunner.run", return_value=result),
                     patch("packaged.record") as evidence,
+                    patch("packaged.platform.platform", return_value="Synthetic host"),
                 ):
                     with self.assertRaisesRegex(AssertionError, "Installed native"):
                         packaged.check(language, Path(temporary))

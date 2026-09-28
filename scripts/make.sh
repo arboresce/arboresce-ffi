@@ -703,7 +703,7 @@ case "$1" in
     build-linux) build_linux ;;
     test-linux) test_linux ;;
     test-go-platforms) test_go_platforms ;;
-    test-packaged-go|test-packaged-swift|test-packaged-ios|test-packaged-android|test-packaged-c|test-packaged-cpp) uv run --python 3.14.7 --no-project python tests/platforms/packaged.py "${1#test-packaged-}" --artifacts "${ARBORESCE_PACKAGE_ROOT:-$ROOT/build/dist}" ;;
+    test-packaged-python|test-packaged-typescript|test-packaged-kotlin|test-packaged-linux|test-packaged-go|test-packaged-swift|test-packaged-ios|test-packaged-android|test-packaged-c|test-packaged-cpp) uv run --python 3.14.7 --no-project python tests/platforms/packaged.py "${1#test-packaged-}" --artifacts "${ARBORESCE_PACKAGE_ROOT:-$ROOT/build/dist}" ;;
     format) format ;;
     verify) doctor; check; check_generated; test_all ;;
     check) check ;;

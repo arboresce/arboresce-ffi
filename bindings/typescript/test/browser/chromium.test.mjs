@@ -2,7 +2,8 @@ import { chromium } from "playwright";
 import test from "node:test";
 
 import { createServer } from "node:http";
-import { readFile } from "node:fs/promises";
+import { appendFile, readFile } from "node:fs/promises";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { resolve, sep } from "node:path";
 import assert from "node:assert/strict";
@@ -124,6 +125,25 @@ test("Chromium browser API contract", { timeout: 30000 }, async (t) => {
       );
       assert.deepEqual(messages, ["Arboresce"]);
     });
+    if (process.env.ARBORESCE_TEST_EVIDENCE && !t.signal.aborted) {
+      const architecture = { arm64: "arm64", x64: "x64" }[os.arch()];
+      assert.ok(architecture, "Unsupported browser host architecture");
+      const entry = {
+        schema: 1,
+        language: "typescript",
+        target: "browser",
+        execution: "browser",
+        architecture,
+        host: `${os.type()} ${os.release()}`,
+        runtime: { chromium: browser.version() },
+        minimum_runtime: false,
+        suite: process.env.ARBORESCE_TEST_SUITE || "public",
+      };
+      await appendFile(
+        process.env.ARBORESCE_TEST_EVIDENCE,
+        JSON.stringify(entry) + "\n",
+      );
+    }
   } finally {
     await browser?.close();
     await new Promise((resolve) => server.close(resolve));

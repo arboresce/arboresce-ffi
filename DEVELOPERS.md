@@ -505,7 +505,8 @@ C-ABI binding; additional language implementations are deferred.
 
 ## Prepared platform consumers
 
-`test-packaged-go`, `test-packaged-swift`, `test-packaged-ios`,
+`test-packaged-python`, `test-packaged-typescript`, `test-packaged-kotlin`,
+`test-packaged-linux`, `test-packaged-go`, `test-packaged-swift`, `test-packaged-ios`,
 `test-packaged-android`, `test-packaged-c` and `test-packaged-cpp` run the platform
 assertions against existing packages without rebuilding SDK libraries. Set
 `ARBORESCE_PACKAGE_ROOT` to the prepared artifact directory; it defaults to
@@ -526,3 +527,13 @@ objects supplied by the Rust toolchain.
 The FFI dynamic library uses an `@rpath` install name on Apple platforms. Android
 packaging strips debug and `.comment` metadata from staged ELF libraries before
 checking alignment; runtime load segments and exported symbols are retained.
+
+Prepared Python consumers install only from the supplied wheel directory and run
+public API and type checks in a fresh environment. Prepared TypeScript consumers
+run Node, declaration and Chromium assertions against local tarballs. Chromium
+records the version of the browser that executed the tests. Prepared Kotlin tests
+use the existing Maven bundle; Linux consumers run the declared container matrix
+and the macOS x64 Node consumer. These commands require test tools to be set up
+first; they do not rebuild SDK packages. Runtime evidence is valid only when its
+entire command succeeds. The prepared Go matrix also runs the public API suite
+with the race detector on the native macOS host.
