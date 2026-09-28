@@ -391,6 +391,11 @@ carry ABI major 1. Windows is not yet packaged or qualified.
 
 ## Local packages and target policy
 
+TypeScript build tools use the private root `package.json` and its lockfile.
+`make setup-typescript` installs only those tools; the publishable facade keeps
+its native optional dependencies in `bindings/typescript/package.json`. Bootstrap
+does not resolve SDK packages from npm, including for unpublished versions.
+
 `package-python`, `package-typescript`, `package-kotlin`, `package-android`,
 `package-go`, `package-swift`, `package-c` and `package-cpp` create unsigned
 artifacts under `build/dist`. `package-typescript-all` and `package-kotlin-all`

@@ -30,9 +30,9 @@ doctor_typescript() {
     [[ $(node --version) == v22.22.3 ]] || die 'Activate Node 22.22.3 before running TypeScript commands'
 }
 verify_node_generator() {
-    local installed=bindings/typescript/node_modules/@napi-rs/cli/package.json
+    local installed=node_modules/@napi-rs/cli/package.json
     [[ -f "$installed" ]] || die 'Run make setup-typescript before building'
-    [[ $(jq -r .version "$installed") == "$(jq -r '.devDependencies["@napi-rs/cli"]' bindings/typescript/package.json)" ]] || die 'Node generator version differs; run make setup-typescript'
+    [[ $(jq -r .version "$installed") == "$(jq -r '.devDependencies["@napi-rs/cli"]' package.json)" ]] || die 'Node generator version differs; run make setup-typescript'
 }
 doctor_wasm() {
     doctor_typescript
@@ -68,7 +68,7 @@ setup_python() {
 }
 setup_typescript() {
     doctor_typescript
-    npm ci --prefix bindings/typescript --ignore-scripts --no-audit --no-fund
+    npm ci --ignore-scripts --no-audit --no-fund
     if ! command -v wasm-pack >/dev/null || [[ $(wasm-pack --version) != 'wasm-pack 0.15.0' ]]; then
         cargo install wasm-pack --version 0.15.0 --locked --root build/tools
     fi
@@ -192,7 +192,7 @@ build_python() {
 build_node() {
     doctor_typescript
     verify_node_generator
-    bindings/typescript/node_modules/.bin/napi build --manifest-path crates/node/Cargo.toml --package-json-path bindings/typescript/package.json --platform --release --output-dir bindings/typescript/native --js native.cjs --dts native.d.cts -- --locked
+    node_modules/.bin/napi build --manifest-path crates/node/Cargo.toml --package-json-path bindings/typescript/package.json --platform --release --output-dir bindings/typescript/native --js native.cjs --dts native.d.cts -- --locked
 }
 build_wasm() {
     doctor_wasm
@@ -409,7 +409,7 @@ check_generated() (
     for file in arboresce_ffi.go native.h; do
         cmp "$temporary/go/native/$file" "bindings/go/internal/native/$file"
     done
-    bindings/typescript/node_modules/.bin/napi build --manifest-path crates/node/Cargo.toml --package-json-path bindings/typescript/package.json --platform --release --output-dir "$temporary/node" --js native.cjs --dts native.d.cts -- --locked
+    node_modules/.bin/napi build --manifest-path crates/node/Cargo.toml --package-json-path bindings/typescript/package.json --platform --release --output-dir "$temporary/node" --js native.cjs --dts native.d.cts -- --locked
     for file in native.cjs native.d.cts; do
         cmp "$temporary/node/$file" "bindings/typescript/native/$file"
     done
@@ -448,7 +448,7 @@ compile_typescript_tests() {
 test_typescript_types() {
     local result
     mkdir -p build
-    if (cd bindings/typescript && node node_modules/typescript/bin/tsc --strict --noEmit --module NodeNext --target ES2022 test/types/invalid.ts) > build/typescript-invalid.log 2>&1; then
+    if (cd bindings/typescript && node ../../node_modules/typescript/bin/tsc --strict --noEmit --module NodeNext --target ES2022 test/types/invalid.ts) > build/typescript-invalid.log 2>&1; then
         die 'TypeScript accepted an invalid consumer type'
     fi
     result=$(grep -c 'error TS' build/typescript-invalid.log)
@@ -468,9 +468,9 @@ test_wasm() {
 setup_browser() {
     setup_typescript
     if [[ $(uname -s) == Linux ]]; then
-        bindings/typescript/node_modules/.bin/playwright install --with-deps chromium
+        node_modules/.bin/playwright install --with-deps chromium
     else
-        bindings/typescript/node_modules/.bin/playwright install chromium
+        node_modules/.bin/playwright install chromium
     fi
 }
 test_browser() {

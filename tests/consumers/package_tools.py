@@ -287,10 +287,11 @@ def prepare_native_npm(sdk=SDK):
     targets = importlib.util.module_from_spec(specification)
     specification.loader.exec_module(targets)
     policy = targets.load(sdk)
-    installed = source / "node_modules/@napi-rs/cli"
+    tools = json.loads((sdk / "package.json").read_text())
+    installed = sdk / "node_modules/@napi-rs/cli"
     if (
         json.loads((installed / "package.json").read_text())["version"]
-        != metadata["devDependencies"]["@napi-rs/cli"]
+        != tools["devDependencies"]["@napi-rs/cli"]
     ):
         raise ValueError("Node generator version differs; run make setup-typescript")
     staging = sdk / "build/typescript"

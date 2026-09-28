@@ -39,12 +39,12 @@ test_python_types() {
 }
 typescript_format() {
     doctor_typescript
-    bindings/typescript/node_modules/.bin/prettier "$1" 'bindings/typescript/src/**/*.{ts,mjs}' 'bindings/typescript/test/**/*.{ts,mjs}' 'tests/consumers/typescript/*.mjs' 'tests/platforms/fixtures/node/*.mjs' --ignore-unknown
+    node_modules/.bin/prettier "$1" 'bindings/typescript/src/**/*.{ts,mjs}' 'bindings/typescript/test/**/*.{ts,mjs}' 'tests/consumers/typescript/*.mjs' 'tests/platforms/fixtures/node/*.mjs' --ignore-unknown
 }
 format_typescript() { typescript_format --write; }
 check_typescript() {
     typescript_format --check
-    (cd bindings/typescript && node node_modules/typescript/bin/tsc --noEmit -p tsconfig.json)
+    (cd bindings/typescript && node ../../node_modules/typescript/bin/tsc --noEmit -p tsconfig.json)
 }
 go_files() {
     find bindings/go -type f -name '*.go' ! -name arboresce_ffi.go

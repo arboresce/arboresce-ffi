@@ -1,0 +1,14 @@
+{
+  "name": "arboresce-sdk-tools",
+  "private": true,
+  "engines": {
+    "node": ">=22.22.3"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "@napi-rs/cli": "3.10.5",
+    "@types/node": "22.19.15",
+    "playwright": "1.63.0",
+    "prettier": "3.6.2"
+  }
+}

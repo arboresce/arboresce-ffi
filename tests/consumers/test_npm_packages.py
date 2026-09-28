@@ -1,5 +1,6 @@
 import json
 import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -21,6 +22,7 @@ class NativeNpmPackages(unittest.TestCase):
         self.sdk = Path(temporary.name)
         for name in (
             "Cargo.toml",
+            "package.json",
             "tests/platforms/targets.py",
             "tests/platforms/targets.json",
             "bindings/go/native-platforms.json",
@@ -32,12 +34,52 @@ class NativeNpmPackages(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(SDK / name, path)
         self.source = self.sdk / "bindings/typescript"
-        (self.source / "node_modules").symlink_to(
-            SDK / "bindings/typescript/node_modules", target_is_directory=True
+        (self.sdk / "node_modules").symlink_to(
+            SDK / "node_modules", target_is_directory=True
         )
         self.metadata = json.loads((self.source / "package.json").read_text())
         self.policy = json.loads(
             (self.sdk / "tests/platforms/targets.json").read_text()
+        )
+
+    def test_fresh_bootstrap_does_not_resolve_unpublished_sdk_packages(self):
+        bootstrap = self.sdk / "bootstrap"
+        bootstrap.mkdir()
+        for name in ("package.json", "package-lock.json"):
+            shutil.copyfile(SDK / name, bootstrap / name)
+        facade = bootstrap / "bindings/typescript"
+        facade.mkdir(parents=True)
+        metadata = self.metadata | {
+            "version": "999.0.0",
+            "optionalDependencies": {
+                name: "999.0.0" for name in self.metadata["optionalDependencies"]
+            },
+        }
+        (facade / "package.json").write_text(json.dumps(metadata))
+        (bootstrap / ".npmrc").write_text("@arboresce:registry=http://127.0.0.1:9/\n")
+        subprocess.run(
+            [
+                "npm",
+                "ci",
+                "--ignore-scripts",
+                "--no-audit",
+                "--no-fund",
+                "--cache",
+                str(bootstrap / "cache"),
+            ],
+            cwd=bootstrap,
+            check=True,
+            timeout=120,
+            capture_output=True,
+        )
+        self.assertFalse((bootstrap / "node_modules/@arboresce").exists())
+        self.assertEqual(
+            json.loads(
+                (bootstrap / "node_modules/@napi-rs/cli/package.json").read_text()
+            )["version"],
+            json.loads((bootstrap / "package.json").read_text())["devDependencies"][
+                "@napi-rs/cli"
+            ],
         )
 
     def test_generator_preserves_source_and_produces_only_active_packages(self):
