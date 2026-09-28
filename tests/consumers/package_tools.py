@@ -393,33 +393,39 @@ def package_typescript(sdk=SDK):
         shutil.copytree(packages, destination)
 
 
+def prepare_typescript_consumer(consumer, packages, sdk=SDK):
+    release = version(sdk)
+    main = packages / f"arboresce-{release}.tgz"
+    native = packages / f"arboresce-native-{native_npm_suffix()}-{release}.tgz"
+    shutil.copytree(sdk / "tests/consumers/typescript", consumer)
+    shutil.copytree(sdk / "bindings/typescript/test", consumer / "test")
+    run(
+        ["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"],
+        cwd=consumer,
+    )
+    run(
+        [
+            "npm",
+            "install",
+            "--offline",
+            "--ignore-scripts",
+            "--no-audit",
+            "--no-fund",
+            main,
+            native,
+        ],
+        cwd=consumer,
+    )
+
+
 def test_typescript_consumer(browser=False, sdk=SDK, artifacts=None):
     release = version(sdk)
     packages = Path(artifacts) if artifacts is not None else sdk / "build/dist/npm"
     main = packages / f"arboresce-{release}.tgz"
-    native = packages / f"arboresce-native-{native_npm_suffix()}-{release}.tgz"
     with tempfile.TemporaryDirectory(prefix="arboresce-npm-consumer-") as temporary:
         root = Path(temporary)
         consumer = root / "consumer"
-        shutil.copytree(sdk / "tests/consumers/typescript", consumer)
-        shutil.copytree(sdk / "bindings/typescript/test", consumer / "test")
-        run(
-            ["npm", "ci", "--ignore-scripts", "--no-audit", "--no-fund"],
-            cwd=consumer,
-        )
-        run(
-            [
-                "npm",
-                "install",
-                "--offline",
-                "--ignore-scripts",
-                "--no-audit",
-                "--no-fund",
-                main,
-                native,
-            ],
-            cwd=consumer,
-        )
+        prepare_typescript_consumer(consumer, packages, sdk)
         run(["npm", "test"], cwd=consumer)
         invalid = run(
             [

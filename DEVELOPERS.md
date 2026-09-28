@@ -537,3 +537,7 @@ and the macOS x64 Node consumer. These commands require test tools to be set up
 first; they do not rebuild SDK packages. Runtime evidence is valid only when its
 entire command succeeds. The prepared Go matrix also runs the public API suite
 with the race detector on the native macOS host.
+
+Prepared Linux checks compile copied TypeScript tests in an isolated consumer
+against the supplied npm tarballs. They do not require generated TypeScript
+outputs in the source checkout.

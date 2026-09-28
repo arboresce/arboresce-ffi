@@ -131,10 +131,12 @@ class LinuxPackages(unittest.TestCase):
             shutil.copyfile(
                 SDK / "tests/platforms/python_runtime.py", root / "python_runtime.py"
             )
-            self.run_command(
-                ["npm", "run", "test:compile", "--prefix", SDK / "bindings/typescript"]
+            node_consumer = root / "node-consumer"
+            packages.prepare_typescript_consumer(
+                node_consumer, self.artifacts / "npm", SDK
             )
-            shutil.copytree(SDK / "bindings/typescript/build/test", root / "node-tests")
+            self.run_command(["npm", "run", "build"], cwd=node_consumer)
+            shutil.copytree(node_consumer / "build/test", root / "node-tests")
             jar = f"/artifacts/maven/ai/arboresce/arboresce/{VERSION}/arboresce-{VERSION}.jar"
             for architecture, suffix in (("arm64", "arm64"), ("amd64", "x64")):
                 with self.subTest(architecture=architecture):
