@@ -19,14 +19,16 @@ SDK = Path(__file__).resolve().parents[2]
 NATIVE_NPM_LICENSES = {"LICENSE-MIT": "LICENSE.MIT", "LICENSE-APACHE": "LICENSE.APACHE"}
 
 
-def run(command, cwd=None, env=None, capture=False, check=True):
+def run(command, cwd=None, env=None, capture=False, check=True, merge_stderr=True):
     return subprocess.run(
         [str(item) for item in command],
         cwd=cwd,
         env=os.environ | (env or {}),
         text=True,
         stdout=subprocess.PIPE if capture else None,
-        stderr=subprocess.STDOUT if capture else None,
+        stderr=(subprocess.STDOUT if merge_stderr else subprocess.PIPE)
+        if capture
+        else None,
         check=check,
     )
 
@@ -709,6 +711,7 @@ def test_kotlin_consumer(sdk=SDK, artifacts=None):
                 [executable, "-Djna.nosys=true", "-cp", classpath, "Consumer"],
                 cwd=consumer,
                 capture=True,
+                merge_stderr=False,
             )
             if result.stdout != "Arboresce\n":
                 raise ValueError(

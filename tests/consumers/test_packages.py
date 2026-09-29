@@ -1,10 +1,50 @@
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 import zipfile
 from pathlib import Path
 
-from package_tools import digest, distribution_files, package_go, write_go_proxy
+from package_tools import digest, distribution_files, package_go, run, write_go_proxy
+
+
+class ProcessCaptureTests(unittest.TestCase):
+    def test_separate_capture_preserves_stdout_and_stderr(self):
+        result = run(
+            [
+                sys.executable,
+                "-c",
+                "import sys; print('result'); print('diagnostic', file=sys.stderr)",
+            ],
+            capture=True,
+            merge_stderr=False,
+        )
+        self.assertEqual(result.stdout, "result\n")
+        self.assertEqual(result.stderr, "diagnostic\n")
+
+    def test_failed_separate_capture_retains_both_streams(self):
+        with self.assertRaises(subprocess.CalledProcessError) as failure:
+            run(
+                [
+                    sys.executable,
+                    "-c",
+                    "import sys; print('result'); print('failure', file=sys.stderr); sys.exit(7)",
+                ],
+                capture=True,
+                merge_stderr=False,
+            )
+        self.assertEqual(failure.exception.returncode, 7)
+        self.assertEqual(failure.exception.stdout, "result\n")
+        self.assertEqual(failure.exception.stderr, "failure\n")
+
+    def test_default_capture_retains_merged_diagnostics(self):
+        result = run(
+            [sys.executable, "-c", "import sys; print('diagnostic', file=sys.stderr)"],
+            capture=True,
+        )
+        self.assertEqual(result.stdout, "diagnostic\n")
+        self.assertIsNone(result.stderr)
 
 
 class GoDistributionTests(unittest.TestCase):
