@@ -20,6 +20,19 @@ from runtime_evidence import record
 SDK = Path(__file__).resolve().parents[2]
 
 
+def android_environment(android, root):
+    user = root / "android-user"
+    avd = user / "avd"
+    avd.mkdir(parents=True, exist_ok=True)
+    return dict(
+        os.environ,
+        ANDROID_HOME=str(android),
+        ANDROID_SDK_ROOT=str(android),
+        ANDROID_USER_HOME=str(user),
+        ANDROID_AVD_HOME=str(avd),
+    )
+
+
 def android_properties(path):
     values = {}
     for line in path.read_text().splitlines():
@@ -157,12 +170,7 @@ class AndroidConsumer(unittest.TestCase):
             elif self.repository_archive is not None:
                 with zipfile.ZipFile(self.repository_archive) as archive:
                     archive.extractall(project / "repository")
-            env = dict(
-                os.environ,
-                ANDROID_HOME=str(android),
-                ANDROID_SDK_ROOT=str(android),
-                ANDROID_AVD_HOME=str(root / "avd"),
-            )
+            env = android_environment(android, root)
             self.checked(
                 [
                     str(self.sdk / "bindings/kotlin/gradlew"),
@@ -219,6 +227,7 @@ class AndroidConsumer(unittest.TestCase):
                     check=True,
                 )
             )
+            self.assertTrue((Path(env["ANDROID_AVD_HOME"]) / f"{device}.ini").is_file())
             port, release_sockets = cleanup.enter_context(reserve_emulator_port())
             adb = [str(android / "platform-tools/adb"), "-s", f"emulator-{port}"]
             with (root / "emulator.log").open("w") as log:

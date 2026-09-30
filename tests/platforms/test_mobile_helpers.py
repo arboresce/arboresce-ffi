@@ -22,6 +22,34 @@ import test_go_platforms
 import test_ios
 
 
+class AndroidEnvironment(unittest.TestCase):
+    def test_avd_state_exists_and_does_not_inherit_user_locations(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            android = root / "sdk"
+            with patch.dict(
+                os.environ,
+                {
+                    "ANDROID_USER_HOME": "/other/user",
+                    "ANDROID_AVD_HOME": "/other/avd",
+                    "ANDROID_HOME": "/other/sdk",
+                    "ANDROID_SDK_ROOT": "/other/sdk",
+                },
+            ):
+                env = test_android.android_environment(android, root)
+            self.assertEqual(env["ANDROID_HOME"], str(android))
+            self.assertEqual(env["ANDROID_SDK_ROOT"], str(android))
+            user = Path(env["ANDROID_USER_HOME"])
+            avd = Path(env["ANDROID_AVD_HOME"])
+            self.assertTrue(user.is_relative_to(root))
+            self.assertEqual(avd, user / "avd")
+            self.assertTrue(avd.is_dir())
+            self.assertEqual(
+                test_android.android_environment(android, root)["ANDROID_AVD_HOME"],
+                str(avd),
+            )
+
+
 class RuntimeEvidence(unittest.TestCase):
     def test_collection_is_optional_and_preserves_actual_runtime(self):
         with tempfile.TemporaryDirectory() as temporary:
