@@ -262,7 +262,10 @@ build_swift_apple() (
     IPHONEOS_DEPLOYMENT_TARGET=$(sed -nE 's/.*\.iOS\("([^"]+)"\).*/\1/p' Package.swift)
     [[ -n "$MACOSX_DEPLOYMENT_TARGET" && -n "$IPHONEOS_DEPLOYMENT_TARGET" ]] || die 'Missing Apple deployment targets in Package.swift'
     export MACOSX_DEPLOYMENT_TARGET IPHONEOS_DEPLOYMENT_TARGET
-    local target
+    local target deployment_key
+    deployment_key=$(printf '%s\n%s\n' "$MACOSX_DEPLOYMENT_TARGET" "$IPHONEOS_DEPLOYMENT_TARGET" | shasum -a 256 | cut -d ' ' -f 1)
+    CARGO_TARGET_DIR="$(target_dir)/swift-$deployment_key"
+    export CARGO_TARGET_DIR
     for target in aarch64-apple-darwin x86_64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios; do
         cargo build --locked --release -p arboresce-ffi --target "$target"
     done

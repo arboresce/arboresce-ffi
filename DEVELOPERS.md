@@ -340,6 +340,9 @@ always selects that URL/checksum, irrespective of local files or environment.
 Apple archive metadata is normalized with `ZERO_AR_DATE`, and XCFramework library
 and architecture entries use stable ordering before the build receipt is recorded.
 Repeated packaging of unchanged native inputs must produce the same ZIP checksum.
+Swift native builds use a separate Cargo output directory keyed by the macOS and
+iOS deployment targets in `Package.swift`. This prevents reuse of objects built
+for another binding or an earlier deployment target.
 
 ### C11 and C++17
 
