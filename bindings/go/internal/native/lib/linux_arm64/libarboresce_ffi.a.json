@@ -1,0 +1,110 @@
+{
+  "schema": 1,
+  "platform": "linux_arm64",
+  "rust_target": "aarch64-unknown-linux-gnu",
+  "profile": "release",
+  "core_rev": "f0ffbfa8be935bd49c084c2b83a86975967709a4",
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+  "generator": {
+    "repository": "https://github.com/NordSecurity/uniffi-bindgen-go",
+    "version": "0.7.1+v0.31.0",
+    "revision": "0b7fb4ceef12021bd7f790cc516fa9133e001813",
+    "uniffi": "0.31.0",
+    "binary_sha256": "e80a10a202a6ac09425abc08abe524d6304a8d0c745eca25800963ee067d447c"
+  },
+  "archive_sha256": "f3fe2ef0db197a5cae6010e63d640171319c21e0d6b94bbe5cade9fa84befad4",
+  "inputs": [
+    {
+      "path": "scripts/make.sh",
+      "sha256": "e7f3aa783ac4df8e2a8daa54e7b86f61b1b3f2221ab3f313acfd9abeea7d5206"
+    },
+    {
+      "path": "scripts/rust.sh",
+      "sha256": "002a98063c9d2fe708db00ea20744ac04a8f7cc448dcee3393c59700ecc4e702"
+    },
+    {
+      "path": "Cargo.toml",
+      "sha256": "88b87d9f09006243b0316e4132abf51a3914d5930cba37ddee9a0ffad5644c1b"
+    },
+    {
+      "path": "Cargo.lock",
+      "sha256": "0ad811f49a1d54fbe64a341d9a2c99f904fe70109d782d4bd606f60ab3efdb1a"
+    },
+    {
+      "path": "rust-toolchain.toml",
+      "sha256": "887f9be066a15585a2c583578e84b0fcb541126d81546276bad3d2ff00d61167"
+    },
+    {
+      "path": "crates/ffi/Cargo.toml",
+      "sha256": "ba49b42703cb2d94b8ebcda99baad7d9f08cb21b84ef30ac23eb505f035e62e8"
+    },
+    {
+      "path": "crates/ffi/build.rs",
+      "sha256": "ade08cf0d133a4663876f1842ea4052759e8fba82e1998129ed555f81c6b594e"
+    },
+    {
+      "path": "crates/ffi/src/lib.rs",
+      "sha256": "4901d56b688f1e4064a50144c40312cd8129f39aacc65bfed805f03312378c82"
+    },
+    {
+      "path": "crates/ffi/uniffi.toml",
+      "sha256": "fe32695b72a94411dd8df150b3f38404b697b13f9b8db9a7aabdaa63ec4efd60"
+    },
+    {
+      "path": "crates/ffi/go-bindgen.json",
+      "sha256": "e698f1ca5852b827df28af73d3b15717ce7cfd797606069d2b8a234bc3cf54a1"
+    },
+    {
+      "path": "bindings/go/native-platforms.json",
+      "sha256": "65c529ef346d2e5c3f101ad80ea9577b4ed166210b181e3180dba5dba1b3c46a"
+    },
+    {
+      "path": "bindings/go/go.mod",
+      "sha256": "5d1f204fedb9c78eddd36ba0026d542e1256b7ae5dcf41ced99e6e2e813437bc"
+    },
+    {
+      "path": "bindings/go/arboresce.go",
+      "sha256": "c3f9e679804c97d456efed70cb3b16f3ed6be4f4ef987d2631b29bfa2fda42ad"
+    },
+    {
+      "path": "bindings/go/internal/native/link.go",
+      "sha256": "1f7cf76d8d347ff61ace8afc0d27d46b020bf19a4b2f1d7354492bdc67f57332"
+    },
+    {
+      "path": "bindings/go/internal/native/arboresce_ffi.go",
+      "sha256": "b36608c7ac2fd0cbfe41f790c9b6de36cc9eb9b469fd9b4b4d47cfc79d38f5e6"
+    },
+    {
+      "path": "bindings/go/internal/native/native.h",
+      "sha256": "f0a085f633a5e53170f37ad1e7678c928b7688fd3c24d36eb5a7bb41187c6aad"
+    },
+    {
+      "path": "scripts/checks.sh",
+      "sha256": "163fd8d07c1d1a4c3c290e83ab6f61fb2d7a3068a79a479c177a6a4d400d41a2"
+    },
+    {
+      "path": "scripts/native.sh",
+      "sha256": "61f1a61f290469eb2b5b32c8fa1a8a0ccdb91e77b114eff0b65f8a3e53c8eeda"
+    },
+    {
+      "path": "scripts/packages.sh",
+      "sha256": "d30748a88f77d43d5c140d2f604ee9f699092e6ba4c508ee15fa189f7e26b505"
+    },
+    {
+      "path": "scripts/swift.sh",
+      "sha256": "ecb79d9ff7f52915a4e9bc65f11057eb314765c25861489826c728d1b1972b43"
+    },
+    {
+      "path": "scripts/support.sh",
+      "sha256": "9d2f5bc1c4d4ecc69427ded2682b3a16b8393dba5b20bcf78d03891aa633b075"
+    },
+    {
+      "path": "tests/platforms/targets.json",
+      "sha256": "8aa0da38f89689a2a1006a1ec9f3507c5f8ea5f2693283863bcb105d7dbd7405"
+    },
+    {
+      "path": "tests/consumers/package_tools.py",
+      "sha256": "191dab99de344b76417657aea696e007124dd23bb8a543c843128f41334696e4"
+    }
+  ]
+}
