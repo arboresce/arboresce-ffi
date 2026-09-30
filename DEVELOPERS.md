@@ -337,6 +337,9 @@ target. The local check rejects stale or altered XCFrameworks; fresh consumers
 use the versioned asset and checksum in `Package.swift`. The root manifest
 always selects that URL/checksum, irrespective of local files or environment.
 `make package-swift` produces unsigned local ZIPs; it never publishes an asset.
+Apple archive metadata is normalized with `ZERO_AR_DATE`, and XCFramework library
+and architecture entries use stable ordering before the build receipt is recorded.
+Repeated packaging of unchanged native inputs must produce the same ZIP checksum.
 
 ### C11 and C++17
 

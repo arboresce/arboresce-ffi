@@ -244,7 +244,7 @@ build_swift() {
     swift build --package-path build/swift-dev
 }
 swift_inventory() {
-    shasum -a 256 Cargo.toml Cargo.lock rust-toolchain.toml crates/ffi/Cargo.toml crates/ffi/build.rs crates/ffi/uniffi.toml scripts/make.sh scripts/rust.sh scripts/swift.sh bindings/swift/dev/Package.swift
+    shasum -a 256 Cargo.toml Cargo.lock rust-toolchain.toml crates/ffi/Cargo.toml crates/ffi/build.rs crates/ffi/uniffi.toml scripts/make.sh scripts/rust.sh scripts/swift.sh tests/consumers/swift_packages.py bindings/swift/dev/Package.swift
     sed '/^let releaseChecksum = /d' Package.swift | shasum -a 256
     find crates/ffi/src bindings/swift/Sources build/swift/Arboresce.xcframework -type f -print | LC_ALL=C sort | while IFS= read -r file; do shasum -a 256 "$file"; done
     rustc --version
@@ -273,13 +273,14 @@ build_swift_apple() (
     lipo -create "$(target_dir)/aarch64-apple-darwin/release/libarboresce_ffi.a" "$(target_dir)/x86_64-apple-darwin/release/libarboresce_ffi.a" -output build/swift/macos/libarboresce_ffi.a
     lipo -create "$(target_dir)/aarch64-apple-ios-sim/release/libarboresce_ffi.a" "$(target_dir)/x86_64-apple-ios/release/libarboresce_ffi.a" -output build/swift/simulator/libarboresce_ffi.a
     cp "$(target_dir)/aarch64-apple-ios/release/libarboresce_ffi.a" build/swift/ios/
-    xcrun strip -S build/swift/macos/libarboresce_ffi.a build/swift/simulator/libarboresce_ffi.a build/swift/ios/libarboresce_ffi.a
+    ZERO_AR_DATE=1 xcrun strip -S build/swift/macos/libarboresce_ffi.a build/swift/simulator/libarboresce_ffi.a build/swift/ios/libarboresce_ffi.a
     rm -rf build/swift/Arboresce.xcframework
     xcodebuild -create-xcframework \
       -library "$ROOT/build/swift/macos/libarboresce_ffi.a" -headers "$ROOT/build/swift/include" \
       -library "$ROOT/build/swift/simulator/libarboresce_ffi.a" -headers "$ROOT/build/swift/include" \
       -library "$ROOT/build/swift/ios/libarboresce_ffi.a" -headers "$ROOT/build/swift/include" \
       -output "$ROOT/build/swift/Arboresce.xcframework"
+    uv run --python 3.14.7 --no-project python tests/consumers/swift_packages.py normalize
     swift_inventory > build/swift/receipt.txt
 )
 build_linux_native() {

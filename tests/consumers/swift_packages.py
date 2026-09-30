@@ -1,5 +1,6 @@
 import argparse
 import os
+import plistlib
 import shutil
 import stat
 import subprocess
@@ -70,6 +71,22 @@ def staged_files(sdk):
     if "Arboresce.xcframework/Info.plist" not in files:
         raise ValueError("Swift package has no XCFramework manifest")
     return files
+
+
+def normalize_framework(sdk=SDK):
+    framework = Path(sdk) / "build/swift/Arboresce.xcframework"
+    if framework.is_symlink():
+        raise ValueError("Unsupported Swift framework symlink")
+    manifest = regular_files(framework)["Info.plist"]
+    value = plistlib.loads(manifest.read_bytes())
+    libraries = value["AvailableLibraries"]
+    identities = [library["LibraryIdentifier"] for library in libraries]
+    if len(identities) != len(set(identities)):
+        raise ValueError("Duplicate framework library")
+    for library in libraries:
+        library["SupportedArchitectures"] = sorted(library["SupportedArchitectures"])
+    libraries.sort(key=lambda library: library["LibraryIdentifier"])
+    manifest.write_bytes(plistlib.dumps(value, fmt=plistlib.FMT_XML, sort_keys=True))
 
 
 def package_swift(sdk=SDK):
@@ -191,10 +208,12 @@ def test_swift_consumer(sdk=SDK, artifact=None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("package", "test"))
+    parser.add_argument("command", choices=("normalize", "package", "test"))
     parser.add_argument("--artifact", type=Path)
     arguments = parser.parse_args()
-    if arguments.command == "package":
+    if arguments.command == "normalize":
+        normalize_framework()
+    elif arguments.command == "package":
         package_swift()
     else:
         test_swift_consumer(artifact=arguments.artifact)

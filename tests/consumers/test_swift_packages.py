@@ -1,3 +1,4 @@
+import plistlib
 import shutil
 import stat
 import tempfile
@@ -33,6 +34,50 @@ class SwiftPackages(unittest.TestCase):
         framework.mkdir(parents=True)
         (framework / "Info.plist").write_bytes(b"fixture framework")
         shutil.copytree(framework, self.staged / "Arboresce.xcframework")
+
+    def test_framework_metadata_is_stable_across_library_order(self):
+        manifest = self.sdk / "build/swift/Arboresce.xcframework/Info.plist"
+        libraries = [
+            {
+                "LibraryIdentifier": "macos",
+                "SupportedArchitectures": ["x86_64", "arm64"],
+            },
+            {"LibraryIdentifier": "ios", "SupportedArchitectures": ["arm64"]},
+        ]
+        value = {"AvailableLibraries": libraries, "XCFrameworkFormatVersion": "1.0"}
+        manifest.write_bytes(plistlib.dumps(value))
+        swift_packages.normalize_framework(self.sdk)
+        original = manifest.read_bytes()
+        libraries.reverse()
+        libraries[1]["SupportedArchitectures"].reverse()
+        manifest.write_bytes(plistlib.dumps(value, fmt=plistlib.FMT_BINARY))
+        swift_packages.normalize_framework(self.sdk)
+        self.assertEqual(manifest.read_bytes(), original)
+        swift_packages.normalize_framework(self.sdk)
+        self.assertEqual(manifest.read_bytes(), original)
+        self.assertEqual(plistlib.loads(original)["XCFrameworkFormatVersion"], "1.0")
+
+    def test_framework_metadata_rejects_duplicate_libraries(self):
+        manifest = self.sdk / "build/swift/Arboresce.xcframework/Info.plist"
+        library = {"LibraryIdentifier": "ios", "SupportedArchitectures": ["arm64"]}
+        manifest.write_bytes(plistlib.dumps({"AvailableLibraries": [library, library]}))
+        with self.assertRaisesRegex(ValueError, "Duplicate framework library"):
+            swift_packages.normalize_framework(self.sdk)
+
+    def test_framework_metadata_rejects_symlink(self):
+        manifest = self.sdk / "build/swift/Arboresce.xcframework/Info.plist"
+        manifest.unlink()
+        manifest.symlink_to(self.sdk / "Cargo.toml")
+        with self.assertRaisesRegex(ValueError, "Unsupported Swift package input"):
+            swift_packages.normalize_framework(self.sdk)
+
+    def test_framework_metadata_rejects_symlinked_framework(self):
+        framework = self.sdk / "build/swift/Arboresce.xcframework"
+        external = self.sdk / "external-framework"
+        framework.rename(external)
+        framework.symlink_to(external, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "Unsupported Swift framework symlink"):
+            swift_packages.normalize_framework(self.sdk)
 
     def test_package_is_deterministic_and_excludes_local_cache(self):
         (self.staged / ".build").mkdir()
