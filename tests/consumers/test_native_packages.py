@@ -104,6 +104,49 @@ class NativeArtifacts(unittest.TestCase):
                 )
             )
 
+    def route_build(self):
+        build = self.sdk / "build"
+        destination = self.root / "routed-build"
+        shutil.move(build, destination)
+        build.symlink_to(destination, target_is_directory=True)
+
+    def test_routed_build_preserves_c_and_cpp_package_bytes(self):
+        expected = {kind: self.package(kind).read_bytes() for kind in ("c", "cpp")}
+        self.route_build()
+        for kind, content in expected.items():
+            with self.subTest(kind=kind):
+                self.assertEqual(self.package(kind).read_bytes(), content)
+
+    def test_routed_build_rejects_symlinked_native_directory(self):
+        self.route_build()
+        directory = self.sdk / "build/native"
+        destination = self.root / "native-alias"
+        shutil.move(directory, destination)
+        directory.symlink_to(destination, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, "Symlinked native package directory"):
+            self.package()
+
+    def test_routed_build_rejects_symlinked_receipt(self):
+        self.route_build()
+        receipt = self.sdk / "build/native/build-receipt.json"
+        destination = self.root / "receipt.json"
+        shutil.move(receipt, destination)
+        receipt.symlink_to(destination)
+        with self.assertRaisesRegex(ValueError, "Invalid native library alias"):
+            self.package()
+
+    def test_routed_build_rejects_changed_tool_identity(self):
+        self.route_build()
+        with patch.object(native, "tool_identity", return_value={"rust": "changed"}):
+            with self.assertRaisesRegex(ValueError, "Stale"):
+                self.package()
+
+    def test_routed_build_rejects_changed_staged_artifact(self):
+        self.route_build()
+        (self.stage / "libarboresce_c.a").write_bytes(b"changed")
+        with self.assertRaisesRegex(ValueError, "Corrupt native build artifacts"):
+            self.package()
+
     def test_extra_installed_file_is_rejected(self):
         (self.prefix / "lib/unexpected.so").write_bytes(b"extra")
         with self.assertRaisesRegex(ValueError, "Unexpected"):
@@ -190,12 +233,14 @@ class NativeArtifacts(unittest.TestCase):
             self.package()
 
     def test_stale_source_is_rejected(self):
+        self.route_build()
         source = self.sdk / "crates/c/src/lib.rs"
         source.write_text(source.read_text() + "\n")
         with self.assertRaisesRegex(ValueError, "Stale"):
             self.package()
 
     def test_wrong_build_host_is_rejected(self):
+        self.route_build()
         receipt = self.sdk / "build/native/build-receipt.json"
         receipt.write_text(
             json.dumps(json.loads(receipt.read_text()) | {"target": "wrong-host"})

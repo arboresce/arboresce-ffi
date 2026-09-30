@@ -293,7 +293,7 @@ def record_build(sdk=SDK):
 
 def validate_build(sdk):
     record = json.loads(
-        regular_file(sdk, "build/native/build-receipt.json").read_text()
+        regular_file(Path(sdk) / "build", "native/build-receipt.json").read_text()
     )
     if any(
         record.get(key) != value for key, value in identity(sdk).items()
