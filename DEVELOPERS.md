@@ -171,6 +171,12 @@ the same development version. Native wheel tags do not imply pure Python, abi3,
 free-threaded support or support below the declared Python 3.14 floor.
 For Linux cross-build prerequisites, run `make setup-linux`.
 
+Linux wheel builds retain the FFI library's symbol table because the pinned UniFFI
+generator reads API metadata from ELF symbols. Stripping those symbols before
+binding generation can produce an empty Python binding without a build error.
+The Linux shared-library linker removes debug sections while keeping that table.
+The installed Linux package checks verify the generated API on both architectures.
+
 ### TypeScript: Node.js and browser WASM
 
 Requires Node 22.22.3 and npm, in addition to the shared Rust prerequisites.

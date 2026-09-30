@@ -303,7 +303,7 @@ build_linux() {
     build_linux_native
     local target
     for target in aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu; do
-        PATH="$ROOT/build/python/bin:$PATH" build/python/bin/maturin build --locked --release --zig --target "$target" --compatibility manylinux2014 --interpreter "$(uv python find --system 3.14.7)" --out build/dist/python
+        PATH="$ROOT/build/python/bin:$PATH" build/python/bin/maturin build --locked --release --zig --config 'profile.release.package.arboresce-ffi.strip="none"' --target "$target" --compatibility manylinux2014 --interpreter "$(uv python find --system 3.14.7)" --out build/dist/python
     done
 }
 test_linux() {
